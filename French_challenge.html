@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Défi Zéro Faute — 1 Bac (Groq AI Edition)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-atrack {
+            background: #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.15s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(2px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse-fast {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.8;
+                transform: scale(1.05);
+            }
+        }
+
+        .animate-pulse-fast {
+            animation: pulse-fast 1s infinite;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-blue-500/30">
+
+    <div id="app" class="flex-grow w-full flex flex-col justify-center"></div>
+
+    <!-- Modal Paramètres API -->
+    <div id="settings-modal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4 fade-in">
+        <div class="bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl max-w-sm w-full">
+            <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2"><i class="ph-cpu text-blue-400"></i>
+                Configuration Groq AI</h2>
+            <p class="text-[10px] text-slate-400 mb-4 leading-relaxed">
+                Le correcteur orthographique et le simulateur de stress utilisent le modèle
+                <strong>llama-3.3-70b-versatile</strong> de Groq. Entre ta clé d'API (gratuite sur console.groq.com)
+                pour activer ces fonctionnalités. Elle est sauvegardée uniquement sur ton navigateur.
+            </p>
+            <input type="password" id="groq-api-key" placeholder="gsk_..."
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 mb-4 font-mono">
+            <div class="flex justify-end gap-2">
+                <button onclick="toggleSettings()"
+                    class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white transition-colors">Annuler</button>
+                <button onclick="saveGroqKey()"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-lg active:scale-95 transition-all">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const GROQ_MODEL = "llama-3.3-70b-versatile";
+
+        const questionDatabase = {
+            orthographe: [
+                { textParts: ["Dans le cadre de ce ", ", il faut analyser les causes."], options: ["développement", "developpement", "dévelopement", "développemment"], correct: 0, explanation: "Correction : 'développement' s'écrit avec un accent aigu, deux 'p' et UN SEUL 'm'." },
+                { textParts: ["Les arguments que tu as ", " sont très pertinents."], options: ["avancés", "avancé", "avancées", "avancer"], correct: 0, explanation: "Le participe passé s'accorde avec le COD ('Les arguments', masc. pluriel) car il est placé avant le verbe avec l'auxiliaire 'avoir'." },
+                { textParts: ["Il faut faire ", " d'attention aux consignes."], options: ["davantage", "d'avantage", "d'avantages", "d'aventages"], correct: 0, explanation: "'Davantage' (en un seul mot) est l'adverbe de quantité synonyme de 'plus'. 'D'avantage' désigne un gain ou bénéfice." },
+                { textParts: ["C'est un véritable ", " pour le personnage principal."], options: ["dilemme", "dilemne", "dilleme", "dilemmee"], correct: 0, explanation: "'Dilemme' s'écrit avec deux 'm' et pas de 'n' (erreur classique due à l'analogie avec indemne)." },
+                { textParts: ["Le condamné vit un véritable ", "."], options: ["cauchemar", "cauchemard", "cauchemarre", "cauchemardes"], correct: 0, explanation: "'Cauchemar' ne prend pas de 'd' final, contrairement à l'adjectif dérivé 'cauchemardesque'." },
+                { textParts: ["Elle s'est ", " compte de son erreur trop tard."], options: ["rendu", "rendue", "rendus", "rendues"], correct: 0, explanation: "Le COD est 'compte' (se rendre compte de qqc). Placé après le verbe, le participe passé 'rendu' reste invariable." },
+                { textParts: ["Il a dû ", " vers le palais pour prévenir Hémon."], options: ["courir", "courrir", "courire", "courirre"], correct: 0, explanation: "Le verbe 'courir' ne prend qu'un seul 'r' à l'infinitif (contrairement à mourir ou nourrir)." },
+                { textParts: ["L'un des thèmes majeurs de l'œuvre est l'", " de l'enfance."], options: ["intérêt", "interêt", "intéret", "interet"], correct: 0, explanation: "Le nom 'intérêt' prend un accent aigu sur le premier 'e' et un accent circonflexe sur le second." },
+                { textParts: ["Les ", " de Créon sont inflexibles face à la révolte d'Antigone."], options: ["exigences", "exigeances", "éxigences", "éxigeances"], correct: 0, explanation: "Le nom 'exigence' s'écrit sans 'a' devant la terminaison '-gence' et sans accent sur le 'e' initial." },
+                { textParts: ["L'", " réservé au condamné à la Conciergerie est glacial."], options: ["accueil", "acceuil", "aceuil", "acueil"], correct: 0, explanation: "Pour obtenir le son 'keu' après le 'c', on écrit 'ue' et non 'eu' : 'accueil'." },
+                { textParts: ["Il a ", " une certaine sagesse à travers la souffrance."], options: ["acquis", "acquit", "acqui", "acquise"], correct: 0, explanation: "Le participe passé de 'acquérir' est 'acquis' (avec un 's' muet final)." },
+                { textParts: ["Ces deux personnages ", " par leur vision du devoir."], options: ["diffèrent", "différent", "differents", "diffère"], correct: 0, explanation: "Il s'agit ici du verbe 'différer' conjugué à la 3e personne du pluriel (ils diffèrent), à ne pas confondre avec l'adjectif 'différent'." },
+                { textParts: ["C'est un problème ", " de celui d'hier."], options: ["différent", "diffèrent", "différents", "differer"], correct: 0, explanation: "Il s'agit ici de l'adjectif qualificatif masculin singulier 'différent'." },
+                { textParts: ["", ", si cruelle soit-elle, la sentence doit être exécutée."], options: ["Quelque", "Quel que", "Quelle que", "Quelles que"], correct: 0, explanation: "Devant un adjectif suivi du subjonctif, 'quelque' est un adverbe invariable signifiant 'si' ou 'aussi'." },
+                { textParts: ["Le condamné ", " bientôt sa fille pour la dernière fois."], options: ["verra", "voira", "voirra", "vera"], correct: 0, explanation: "Le verbe 'voir' fait 'verra' au futur simple (avec deux 'r')." },
+                { textParts: ["Le roi ", " des gardes pour arrêter la coupable."], options: ["enverra", "envoiera", "envera", "envoyera"], correct: 0, explanation: "Le verbe 'envoyer' fait 'enverra' au futur simple (radical irrégulier avec deux 'r')." },
+                { textParts: ["Antigone sait qu'elle ", " pour son frère."], options: ["mourra", "mourira", "moura", "mourrait"], correct: 0, explanation: "Le verbe 'mourir' prend deux 'r' au futur simple : 'il mourra'. Le conditionnel serait 'mourrait'." },
+                { textParts: ["", " soit son destin, Sidi Mohammed garde sa boîte."], options: ["Quel que", "Quelque", "Quels que", "Quelle que"], correct: 0, explanation: "Devant le verbe être au subjonctif, on écrit 'quel que' en deux mots, accordé avec le sujet masculin singulier 'destin'." },
+                { textParts: ["Je ferai mon devoir, ", " y laisser ma vie."], options: ["dussé-je", "dusse-je", "dusses-je", "dussai-je"], correct: 0, explanation: "À la 1re personne du singulier de l'imparfait du subjonctif avec inversion du sujet, le 'e' muet prend un accent aigu (qui se prononce è) pour faciliter la liaison." },
+                { textParts: ["Le condamné est ", " à monter sur l'échafaud."], options: ["prêt", "près", "prè", "pré"], correct: 0, explanation: "'Prêt' (avec un t) signifie préparé ou disposé à. À ne pas confondre avec la préposition 'près' (de)." },
+                { textParts: ["La foule s'amasse tout ", " de la guillotine."], options: ["près", "prêt", "prè", "pré"], correct: 0, explanation: "'Près' (avec un s) indique la proximité spatiale ou temporelle." },
+                { textParts: ["La nourrice ", " Antigone dès l'aube."], options: ["appelle", "appele", "appèle", "apelle"], correct: 0, explanation: "Le verbe 'appeler' double son 'l' devant un 'e' muet pour faire le son 'èl'." },
+                { textParts: ["Le prisonnier ", " un regard désespéré sur la cellule."], options: ["jette", "jete", "jète", "gette"], correct: 0, explanation: "Le verbe 'jeter' double son 't' devant un 'e' muet pour faire le son 'èt'." },
+                { textParts: ["Le petit garçon aime ", " son imagination de récits fabuleux."], options: ["nourrir", "nourir", "nourire", "nourirres"], correct: 0, explanation: "Le verbe 'nourrir' s'écrit avec deux 'r' après le 'ou'." },
+                { textParts: ["Il est ", " obéir aux ordres du souverain."], options: ["censé", "sensé", "sansé", "s'en c'est"], correct: 0, explanation: "'Censé' (avec un c) signifie supposé ou considéré comme devant faire quelque chose." },
+                { textParts: ["Ce discours est ", " et plein de bon sens."], options: ["sensé", "censé", "sansé", "s'en c'est"], correct: 0, explanation: "'Sensé' (avec un s) signifie qui a du bon sens, intelligent ou raisonnable." },
+                { textParts: ["La boîte de Sidi Mohammed est ", " usée par le temps."], options: ["tout", "toute", "toutes", "tous"], correct: 0, explanation: "L'adverbe 'tout' (signifiant tout à fait) reste invariable devant un adjectif féminin commençant par une voyelle ou un h muet." },
+                { textParts: ["Ismène est ", " honteuse d'avoir eu peur."], options: ["toute", "tout", "toutes", "tous"], correct: 0, explanation: "L'adverbe 'tout' s'accorde en genre et en nombre devant un adjectif féminin commençant par une consonne ou un h aspiré (honteuse)." },
+                { textParts: ["Elle s'est ", " dans ses pensées les plus sombres."], options: ["perdue", "perdu", "perdus", "perdues"], correct: 0, explanation: "Le participe passé d'un verbe pronominal s'accorde avec le COD s'il est placé avant. Ici, 'se' (elle-même) est COD, donc accord au féminin singulier." },
+                { textParts: ["Ils se sont ", " des lettres d'adieu avant la sentence."], options: ["écrit", "écrits", "écrite", "écrites"], correct: 0, explanation: "Le COD est 'des lettres d'adieu', placé après le verbe. Le pronom 'se' est un COI (écrire à soi-même). Le participe reste donc invariable." },
+                { textParts: ["Elles se sont ", " à plusieurs reprises."], options: ["parlé", "parlés", "parlée", "parlées"], correct: 0, explanation: "Le verbe 'parler' est indirect (parler à quelqu'un). Le pronom 'se' est COI, le participe passé reste donc invariable." },
+                { textParts: ["", " personnage de la pièce a un destin tragique."], options: ["Chaque", "Chacun", "Chacune", "Tous"], correct: 0, explanation: "'Chaque' est un déterminant indéfini singulier qui accompagne un nom. 'Chacun' est un pronom." },
+                { textParts: ["J'ai ", " la foule qui se pressait dans la rue."], options: ["aperçu", "apperçu", "aperçut", "apperçut"], correct: 0, explanation: "Le verbe 'apercevoir' prend un seul 'p' et s'écrit avec une cédille devant le 'u' : 'aperçu'." },
+                { textParts: ["Le ", " humain de cette exécution est insupportable."], options: ["coût", "cout", "coute", "coûts"], correct: 0, explanation: "Le nom 'coût' prend un accent circonflexe sur le 'u' en orthographe traditionnelle (l'orthographe rectifiée de 1990 accepte cout, mais coût reste la norme classique)." },
+                { textParts: ["C'est un ", " marquant de la vie du condamné."], options: ["événement", "évenement", "evenement", "évènement"], correct: 0, explanation: "L'orthographe traditionnelle s'écrit 'événement' (avec deux accents aigus), bien que l'orthographe moderne autorise 'évènement'." }
+            ],
+            connecteurs: [
+                { textParts: ["Certains pensent que la peine de mort est dissuasive. ", ", les statistiques prouvent le contraire."], options: ["Néanmoins", "En effet", "Par conséquent", "D'ailleurs"], correct: 0, explanation: "'Néanmoins' introduit l'opposition indispensable pour réfuter la thèse adverse avec force." },
+                { textParts: ["", " ce que l'on pourrait croire, la solitude n'est pas toujours voulue."], options: ["Contrairement à", "Malgré", "Bien que", "Quoique"], correct: 0, explanation: "'Contrairement à' s'associe à un groupe nominal pour marquer le contraste d'idées." },
+                { textParts: ["Antigone veut enterrer son frère, ", " cela doive lui coûter la vie."], options: ["bien que", "même si", "en dépit de", "alors que"], correct: 0, explanation: "'Bien que' réclame obligatoirement l'usage du subjonctif ('doive'). 'Même si' aurait requis l'indicatif ('doit')." },
+                { textParts: ["Il est important de préserver les traditions, ", " elles fondent notre identité."], options: ["car", "donc", "toutefois", "par conséquent"], correct: 0, explanation: "'Car' est la conjonction de coordination par excellence pour exprimer la cause avec sobriété." },
+                { textParts: ["", ", je trouve cette décision injuste."], options: ["Pour ma part", "Au niveau de", "En ce qui concerne", "Quant à"], correct: 0, explanation: "'Pour ma part' exprime l'opinion proprement. Évite 'Au niveau de' qui est un anglicisme ou impropre ici." },
+                { textParts: ["Lalla Aicha rend visite à la famille ; ", " elle veut proposer une sortie au sanctuaire."], options: ["en effet", "en revanche", "bien que", "par conséquent"], correct: 0, explanation: "'En effet' introduit une explication confirmant ce qui précède." },
+                { textParts: ["Créon refuse d'écouter les supplications ; ", " la sentence sera exécutée."], options: ["par conséquent", "néanmoins", "car", "bien que"], correct: 0, explanation: "'Par conséquent' introduit une relation logique de conséquence directe." },
+                { textParts: ["Le condamné espère encore une grâce ; ", " l'heure tourne inexorablement."], options: ["pourtant", "donc", "ainsi", "parce que"], correct: 0, explanation: "'Pourtant' exprime une opposition forte entre l'espoir du condamné et la réalité du temps qui passe." },
+                { textParts: ["La solitude l'accable et, ", ", elle le plonge dans la mélancolie."], options: ["de surcroît", "en revanche", "de peur que", "bien que"], correct: 0, explanation: "'De surcroît' marque une idée d'addition, renforçant l'accablement de la solitude." },
+                { textParts: ["", " le condamné supplie, la justice reste sourde."], options: ["Bien que", "Même si", "Malgré", "En dépit de"], correct: 0, explanation: "'Bien que' est une conjonction de concession suivie obligatoirement du subjonctif ('supplie')." },
+                { textParts: ["", " Sidi Mohammed est jeune, il comprend la détresse de ses parents."], options: ["Même si", "Bien que", "Quoique", "Malgré"], correct: 0, explanation: "'Même si' introduit une concession à l'indicatif ('est')." },
+                { textParts: ["", " les avertissements de la nourrice, Antigone sort dans la nuit."], options: ["Malgré", "Bien que", "Quoique", "Même si"], correct: 0, explanation: "'Malgré' est une préposition qui s'emploie toujours suivie d'un groupe nominal." },
+                { textParts: ["Les gardes rient ", " le devoir de mémoire est ridicule."], options: ["sous prétexte que", "parce que", "puisque", "vu que"], correct: 0, explanation: "'Sous prétexte que' introduit une cause prétendue ou contestée par le locuteur." },
+                { textParts: ["", " tu refuses de m'écouter, je dois agir seule."], options: ["Puisque", "Car", "Comme", "Sous prétexte que"], correct: 0, explanation: "'Puisque' exprime une cause évidente, connue de l'interlocuteur ou déjà posée." },
+                { textParts: ["Le narrateur espère revoir sa fille, ", " elle ne l'oublie pas."], options: ["pourvu qu'", "bien qu'", "afin qu'", "de peur qu'"], correct: 0, explanation: "'Pourvu que' exprime une condition nécessaire assortie d'un souhait (suivi du subjonctif)." },
+                { textParts: ["Il faut agir vite ", " la loi soit respectée."], options: ["pour que", "parce que", "bien que", "alors que"], correct: 0, explanation: "'Pour que' introduit une proposition subordonnée de but réclamant le subjonctif." },
+                { textParts: ["Elle se tait ", " réveiller les soupçons des gardes."], options: ["de crainte de", "afin de", "pour", "de sorte à"], correct: 0, explanation: "'De crainte de' introduit un but négatif avec un verbe à l'infinitif." },
+                { textParts: ["", " Créon perd sa nièce, mais il perd aussi son fils."], options: ["Non seulement", "D'une part", "Soit", "Comme"], correct: 0, explanation: "'Non seulement' s'associe à 'mais aussi' (ou 'mais encore') pour lier deux faits de façon cumulative." },
+                { textParts: ["La foule est ", " dense que le cortège peine à avancer."], options: ["si", "tant", "tellement", "plus"], correct: 0, explanation: "'Si' modifie l'adjectif 'dense' pour exprimer l'intensité corrélée à la conséquence ('que...')." },
+                { textParts: ["", " son entourage ne le comprend pas, Sidi Mohammed se réfugie dans son imaginaire."], options: ["Comme", "Parce que", "Puisque", "Car"], correct: 0, explanation: "'Comme' s'emploie en début de phrase pour marquer la cause avec force." },
+                { textParts: ["", " s'achève la journée difficile du petit garçon."], options: ["Ainsi", "Néanmoins", "Car", "Bien que"], correct: 0, explanation: "'Ainsi' s'emploie en début de phrase pour introduire une conclusion ou une manière d'aboutir." },
+                { textParts: ["Il faut étudier les faits : ", " le crime est grave, d'autre part le châtiment est barbare."], options: ["d'une part", "non seulement", "soit", "d'abord"], correct: 0, explanation: "'D'une part' appelle la corrélation 'd'autre part' pour structurer une énumération bipartite." },
+                { textParts: ["Antigone choisit le devoir moral ; Ismène, ", ", préfère la sécurité."], options: ["en revanche", "en effet", "ainsi", "car"], correct: 0, explanation: "'En revanche' marque l'opposition ou le contraste entre le choix d'Antigone et celui d'Ismène." },
+                { textParts: ["On peut éviter la tragédie ", " renoncer à l'orgueil."], options: ["à condition de", "de peur de", "afin de", "bien que"], correct: 0, explanation: "'À condition de' exprime une restriction/condition suivie d'un infinitif." },
+                { textParts: ["Lalla Zoubida protège son fils ", " il ne tombe malade."], options: ["de peur qu'", "afin qu'", "bien qu'", "si bien qu'"], correct: 0, explanation: "'De peur que' introduit une crainte (but à éviter) et réclame le subjonctif avec le 'ne' explétif." },
+                { textParts: ["Le condamné est isolé dans son cachot, ", " ses pensées l'obsèdent."], options: ["si bien que", "pour que", "bien que", "à condition que"], correct: 0, explanation: "'Si bien que' est une locution conjonctive introduisant une conséquence logique à l'indicatif." },
+                { textParts: ["", " l'heure de l'exécution approche, l'angoisse grandit."], options: ["Au fur et à mesure que", "Bien que", "Puisque", "De peur que"], correct: 0, explanation: "'Au fur et à mesure que' exprime une idée de progression temporelle simultanée." },
+                { textParts: ["", " de moyens financiers, le père doit quitter sa famille."], options: ["Faute", "Grâce", "À cause", "Par"], correct: 0, explanation: "'Faute de' indique une cause négative due à un manque ou une absence." },
+                { textParts: ["Sidi Mohammed surmonte sa solitude ", " ses objets magiques."], options: ["grâce à", "à cause de", "en dépit de", "faute de"], correct: 0, explanation: "'Grâce à' introduit une cause positive ou bénéfique." },
+                { textParts: ["La famille sombre dans la tristesse ", " la perte de la bourse."], options: ["à cause de", "grâce à", "en vue de", "afin de"], correct: 0, explanation: "'À cause de' introduit une cause négative ou préjudiciable." },
+                { textParts: ["", ", l'œuvre de Hugo reste un plaidoyer intemporel contre la peine de mort."], options: ["En conclusion", "D'abord", "De plus", "Néanmoins"], correct: 0, explanation: "'En conclusion' est un connecteur de clôture parfait pour résumer une réflexion." },
+                { textParts: ["Le roi sait qu'Antigone a raison ; ", " il tente d'étouffer l'affaire."], options: ["pourtant", "car", "bien que", "donc"], correct: 0, explanation: "'Pourtant' marque la contradiction entre la conviction intime de Créon et ses actes politiques." },
+                { textParts: ["Le destin d'Antigone est scellé, ", " Créon décide de l'épargner."], options: ["sauf si", "bien que", "pourvu que", "si bien que"], correct: 0, explanation: "'Sauf si' introduit une hypothèse restrictive ou une exception permettant d'éviter l'issue tragique." },
+                { textParts: ["Il écrit son journal ", " occuper son esprit et témoigner."], options: ["pour", "parce que", "bien que", "de crainte de"], correct: 0, explanation: "'Pour' suivi de l'infinitif exprime l'intention ou le but recherché par l'action d'écrire." },
+                { textParts: ["Le condamné souffre dans sa cellule ", " la foule rit au-dehors."], options: ["tandis que", "parce que", "afin que", "bien que"], correct: 0, explanation: "'Tandis que' marque l'opposition ou le contraste simultané entre deux situations." }
+            ],
+            argumentation: [
+                { textParts: ["Pour répondre à la question 9, je dois d'abord ", " mon point de vue, puis le justifier."], options: ["énoncer", "étayer", "réfuter", "valider"], correct: 0, explanation: "On 'énonce' (exprime clairement) sa thèse d'abord, avant de l'étayer (la soutenir par des arguments)." },
+                { textParts: ["L'auteur fait un ", " vibrant contre la peine de mort."], options: ["réquisitoire", "plaidoyer", "éloge", "panégyrique"], correct: 0, explanation: "Un 'réquisitoire' est un discours d'accusation contre un concept. Un 'plaidoyer' le défendrait." },
+                { textParts: ["Il est ", " que la superstition joue un rôle majeur dans la société marocaine de l'époque."], options: ["indéniable", "invraisemblable", "ambigu", "contestable"], correct: 0, explanation: "'Indéniable' est synonyme d'incontestable. Idéal pour appuyer une certitude objective." },
+                { textParts: ["Je ", " totalement à l'idée selon laquelle la solitude renforce la personnalité."], options: ["souscris", "partage", "approuve", "adhère"], correct: 0, explanation: "On dit 'souscrire à' (avec préposition). Si on utilisait 'partage', il n'y aurait pas de préposition à sa suite." },
+                { textParts: ["L'élève doit ", " sa thèse à l'aide d'exemples précis tirés des œuvres."], options: ["étayer", "réfuter", "éluder", "négliger"], correct: 0, explanation: "'Étayer' signifie soutenir, consolider ou appuyer une thèse à l'aide de preuves ou d'exemples." },
+                { textParts: ["Il est aisé de ", " cet argument superficiel."], options: ["réfuter", "approuver", "soutenir", "corroborer"], correct: 0, explanation: "'Réfuter' consiste à prouver la fausseté d'une affirmation à l'aide d'arguments contraires." },
+                { textParts: ["Dans un plan dialectique, la thèse s'oppose à l'", "."], options: ["antithèse", "synthèse", "introduction", "conclusion"], correct: 0, explanation: "L'antithèse est la partie du plan dialectique où l'on développe les contre-arguments opposés à la thèse." },
+                { textParts: ["Faire une ", " consiste à admettre un argument adverse avant de le réfuter."], options: ["concession", "réfutation", "digression", "conclusion"], correct: 0, explanation: "La concession est une stratégie argumentative consistant à accorder une part de vérité à l'adversaire pour mieux la contester ensuite." },
+                { textParts: ["Il est ", " de se demander si la peine de mort est dissuasive."], options: ["légitime", "absurde", "illégal", "invraisemblable"], correct: 0, explanation: "'Légitime' signifie conforme au bon sens, justifié ou équitable." },
+                { textParts: ["L'auteur cherche à ", " le lecteur en faisant appel à sa sensibilité."], options: ["persuader", "convaincre", "dissuader", "contraindre"], correct: 0, explanation: "On 'persuade' en touchant le cœur et les émotions (pathétique), tandis qu'on 'convainc' en s'adressant à la raison." },
+                { textParts: ["Pour ", " le jury, l'avocat doit utiliser des arguments logiques."], options: ["convaincre", "persuader", "émouvoir", "déconcerter"], correct: 0, explanation: "On 'convainc' par des preuves rationnelles et une argumentation logique." },
+                { textParts: ["Le témoignage du condamné est ", ", empreint de ses émotions."], options: ["subjectif", "objectif", "neutre", "impartial"], correct: 0, explanation: "Une pensée 'subjective' dépend de l'affectivité et de la perspective personnelle du sujet." },
+                { textParts: ["Une analyse ", " de la peine de mort s'appuie sur des statistiques réelles."], options: ["objective", "subjective", "fictive", "passionnée"], correct: 0, explanation: "Une approche 'objective' s'efforce de s'en tenir aux faits réels, sans interférence de sentiments personnels." },
+                { textParts: ["C'est un ", " d'exécuter un homme pour montrer que le meurtre est interdit."], options: ["paradoxe", "pléonasme", "euphémisme", "stéréotype"], correct: 0, explanation: "Un 'paradoxe' est une proposition contraire à l'opinion commune ou à la logique apparente." },
+                { textParts: ["Il est ", " de croire que la violence peut résoudre les conflits."], options: ["illusoire", "indéniable", "avéré", "réaliste"], correct: 0, explanation: "'Illusoire' signifie qui repose sur une illusion, chimérique ou trompeur." },
+                { textParts: ["L'objectif de Victor Hugo est de ", " l'inutilité de la peine de mort."], options: ["démontrer", "dissimuler", "contester", "ignorer"], correct: 0, explanation: "'Démontrer' signifie prouver de manière indubitable par un raisonnement rigoureux." },
+                { textParts: ["Cet argument est ", " car il repose sur des préjugés non vérifiés."], options: ["fallacieux", "rigoureux", "pertinent", "irréfutable"], correct: 0, explanation: "'Fallacieux' qualifie un raisonnement mensonger, trompeur ou sans fondement logique." },
+                { textParts: ["L'exemple de la boîte est très ", " pour illustrer la solitude."], options: ["pertinent", "obsolète", "insignifiant", "inadéquat"], correct: 0, explanation: "'Pertinent' qualifie un élément qui convient parfaitement au sujet traité, approprié." },
+                { textParts: ["Antigone veut ", " l'honneur de son frère en l'enterrant."], options: ["défendre", "condamner", "ignorer", "trahir"], correct: 0, explanation: "'Défendre' signifie protéger contre une attaque ou justifier une action face à la loi." },
+                { textParts: ["Le roman à thèse cherche à ", " les dérives de la justice."], options: ["stigmatiser", "valoriser", "encourager", "occulter"], correct: 0, explanation: "'Stigmatiser' signifie dénoncer ou condamner publiquement et sévèrement une pratique ou un comportement." },
+                { textParts: ["Il n'y a pas de ", " concernant l'efficacité de la peine de mort."], options: ["consensus", "conflit", "désaccord", "clivage"], correct: 0, explanation: "Le 'consensus' désigne un accord général parmi les membres d'un groupe ou d'une société." },
+                { textParts: ["La ", " d'opinions entre Ismène et Antigone éclate dès le début."], options: ["divergence", "convergence", "similitude", "harmonie"], correct: 0, explanation: "Une 'divergence' est un désaccord ou une différence de points de vue qui s'écartent l'un de l'autre." },
+                { textParts: ["Le comportement des voisins montre parfois des ", " face à la pauvreté."], options: ["préjugés", "qualités", "valeurs", "principes"], correct: 0, explanation: "Un 'préjugé' est un jugement préconçu ou une opinion préétablie, souvent négative, sur un sujet." },
+                { textParts: ["La ", " permet de dépasser la contradiction entre thèse et antithèse."], options: ["synthèse", "antithèse", "introduction", "digression"], correct: 0, explanation: "Dans le plan dialectique, la 'synthèse' concilie et surmonte l'opposition entre les deux premières parties." },
+                { textParts: ["Les exemples historiques viennent ", " l'idea que la violence engendre la violence."], options: ["corroborer", "contredire", "affaiblir", "invalider"], correct: 0, explanation: "'Corroborer' signifie confirmer, appuyer ou donner plus de force à une hypothèse ou une idée." },
+                { textParts: ["La critique de la foule est ", " dans le roman de Victor Hugo."], options: ["explicite", "implicite", "cachée", "sous-entendue"], correct: 0, explanation: "'Explicite' qualifie ce qui est exprimé de manière claire, formelle et sans ambiguïté." },
+                { textParts: ["Dans Antigone, la critique de la dictature est souvent ", "."], options: ["implicite", "explicite", "évidente", "claire"], correct: 0, explanation: "'Implicite' qualifie ce qui est sous-entendu ou contenu indirectement dans le texte." },
+                { textParts: ["L'auteur utilise des termes ", " pour décrire les spectateurs."], options: ["péjoratifs", "mélioratifs", "élogieux", "neutres"], correct: 0, explanation: "'Péjoratif' qualifie un terme ou une expression qui déprécie ou dévalorise le sujet décrit." },
+                { textParts: ["Sidi Mohammed emploie des mots ", " pour parler de sa boîte."], options: ["mélioratifs", "péjoratifs", "dépréciatifs", "neutres"], correct: 0, explanation: "'Mélioratif' (ou appréciatif) qualifie des termes valorisants qui expriment une opinion positive." },
+                { textParts: ["Nous allons utiliser cette citation pour ", " notre point de vue."], options: ["illustrer", "contredire", "effacer", "ignorer"], correct: 0, explanation: "'Illustrer' signifie éclairer ou rendre plus évident un propos par des exemples concrets." },
+                { textParts: ["La ", " de Victor Hugo est l'abolition de la peine de mort."], options: ["thèse", "concession", "introduction", "transition"], correct: 0, explanation: "La 'thèse' désigne la position ou l'opinion que l'auteur soutient et cherche à démontrer dans son œuvre." },
+                { textParts: ["Le roman suscite un grand ", " sur les conditions de détention."], options: ["débat", "accord", "silence", "apaisement"], correct: 0, explanation: "Un 'débat' est une discussion animée entre plusieurs personnes exposant des avis contraires." },
+                { textParts: ["Créon passe son temps à ", " sur le rôle de l'État."], options: ["discourir", "agir", "fuir", "écouter"], correct: 0, explanation: "'Discourir' signifie parler longuement, tenir un discours formel (souvent opposé à l'action concrète)." },
+                { textParts: ["On ne peut ", " le fait que la solitude affecte le jeune garçon."], options: ["contester", "admettre", "valider", "affirmer"], correct: 0, explanation: "'Contester' signifie remettre en question la véracité ou la valeur d'une affirmation." },
+                { textParts: ["Ce texte a pour ", " d'éveiller la conscience morale."], options: ["vocation", "but", "fin", "cause"], correct: 0, explanation: "Avoir pour 'vocation' signifie être destiné par nature ou par intention à accomplir une mission particulière." }
+            ],
+            oeuvres: [
+                { textParts: ["Antigone est poussée par la ", ", une force invisible qui la mène à sa perte."], options: ["fatalité", "solitude", "rébellion", "culpabilité"], correct: 0, explanation: "La 'fatalité' tragique est le moteur incontournable de la tragédie classique et moderne." },
+                { textParts: ["Dans La Boîte à Merveilles, Sidi Mohammed se réfugie dans son monde ", "."], options: ["imaginaire", "pittoresque", "pathétique", "réaliste"], correct: 0, explanation: "Son univers onirique (la boîte) le préserve de l'hostilité et de la solitude du monde réel." },
+                { textParts: ["Victor Hugo dénonce le caractère ", " et inhumain de l'exécution publique."], options: ["macabre", "festif", "louable", "négligeable"], correct: 0, explanation: "'Macabre' souligne le rapport morbide et révoltant de la foule face à la décapitation." },
+                { textParts: ["Créon incarne l'ordre et la défense de la raison ", "."], options: ["d'État", "divine", "personnelle", "morale"], correct: 0, explanation: "La 'raison d'État' légitime pour Créon le fait d'interdire l'enterrement de Polynice pour préserver Thèbes." },
+                { textParts: ["La Boîte à Merveilles est un roman ", " de la littérature marocaine."], options: ["autobiographique", "historique", "épistolaire", "courtois"], correct: 0, explanation: "Le roman d'Ahmed Sefrioui s'inspire largement de sa propre enfance à Fès, ce qui en fait un récit autobiographique." },
+                { textParts: ["Le condamné commence son journal dans la prison de ", "."], options: ["Bicêtre", "la Conciergerie", "l'Hôtel de Ville", "Toulon"], correct: 0, explanation: "Bicêtre est le premier lieu de détention du condamné (il y passe les six premières semaines)." },
+                { textParts: ["", ", la sœur d'Antigone, représente la soumission."], options: ["Ismène", "Eurydice", "la nourrice", "la reine"], correct: 0, explanation: "Ismène incarne la conformité sociale et refuse d'enfreindre la loi de Créon par peur du châtiment." },
+                { textParts: ["Le condamné a une peur viscérale de la ", "."], options: ["guillotine", "potence", "prison", "torture"], correct: 0, explanation: "La guillotine (ou l'échafaud) symbolise le couperet de la mort brutale et impersonnelle dénoncée par Hugo." },
+                { textParts: ["Lalla ", " est l'amie intime de la mère de Sidi Mohammed."], options: ["Aicha", "Zoubida", "Kenza", "Rahma"], correct: 0, explanation: "Lalla Aicha est une ancienne voisine et l'amie intime à qui Lalla Zoubida rend visite pour confier ses soucis." },
+                { textParts: ["La boîte de Sidi Mohammed contient des objets considérés comme des ", "."], options: ["merveilles", "trésors", "jouets", "secrets"], correct: 0, explanation: "Ces objets ordinaires (clous, billes, épingles) sont métamorphosés par l'imagination poétique de l'enfant en véritables merveilles." },
+                { textParts: ["Antigone est une tragédie moderne écrite par Jean ", "."], options: ["Anouilh", "Sophocle", "Corneille", "Racine"], correct: 0, explanation: "Jean Anouilh a écrit et fait jouer son 'Antigone' en 1944, durant l'Occupation allemande en France." },
+                { textParts: ["L'auteur de La Boîte à Merveilles est Ahmed ", "."], options: ["Sefrioui", "Chraïbi", "Ben Jelloun", "Mrabet"], correct: 0, explanation: "Ahmed Sefrioui est l'un des pionniers de la littérature marocaine d'expression française, auteur de la Boîte (1954)." },
+                { textParts: ["Le Dernier Jour d'un Condamné a été écrit par Victor ", "."], options: ["Hugo", "Balzac", "Flaubert", "Zola"], correct: 0, explanation: "Victor Hugo a publié ce réquisitoire contre la peine de mort en 1829 de manière anonyme dans un premier temps." },
+                { textParts: ["Le Dernier Jour d'un Condamné est un roman à ", "."], options: ["thèse", "suspense", "aventures", "amour"], correct: 0, explanation: "C'est un roman qui défend une cause politique et philosophique précise (ici, l'abolition de la peine de mort)." },
+                { textParts: ["Kenza, qui habite Dar Chouafa, est une ", "."], options: ["voyante", "couturière", "marchande", "blanchisseuse"], correct: 0, explanation: "Kenza est la 'Chouafa' (voyante) qui loue le rez-de-chaussée de la maison et donne son nom à la bâtisse (Dar Chouafa)." },
+                { textParts: ["", ", le fils de Créon, est fiancé à Antigone."], options: ["Hémon", "Polynice", "Étéocle", "le Garde"], correct: 0, explanation: "Hémon aime éperdument Antigone et choisira de mourir à ses côtés dans le tombeau." },
+                { textParts: ["Le condamné à mort regrette de laisser sa fille ", "."], options: ["Marie", "Jeanne", "Sarah", "Fatma"], correct: 0, explanation: "Marie est la petite fille de trois ans qui ne reconnaît plus son père lors de leur ultime et déchirante entrevue." },
+                { textParts: ["Le condamné assiste au ferrage des forçats partant pour le ", "."], options: ["bagne", "palais", "tribunal", "cimetière"], correct: 0, explanation: "Le bagne de Toulon est la destination finale de ces prisonniers enchaînés sous les rires de la foule." },
+                { textParts: ["Lalla ", ", la mère de Sidi Mohammed, est superstitieuse."], options: ["Zoubida", "Aicha", "Kenza", "Rahma"], correct: 0, explanation: "Lalla Zoubida, l'épouse de Maâlem Abdeslem, est la narratrice de nombreuses anecdotes familiales." },
+                { textParts: ["Le père de Sidi Mohammed s'appelle Maâlem ", "."], options: ["Abdeslem", "Larbi", "Fatmi", "Allal"], correct: 0, explanation: "Maâlem Abdeslem est un tisserand fier et travailleur dont le départ temporaire bouleverse la famille." },
+                { textParts: ["Le mari de Lalla Aicha s'appelle Moulay ", "."], options: ["Larbi", "Abdeslem", "Allal", "Fatmi"], correct: 0, explanation: "Moulay Larbi est le babouchier dont les déboires avec son associé Abdelkader nuisent au foyer de Lalla Aicha." },
+                { textParts: ["Le nœud du drame d'Antigone est le refus d'enterrer ", "."], options: ["Polynice", "Étéocle", "Créon", "Hémon"], correct: 0, explanation: "Créon refuse d'enterrer Polynice, déclaré traître à sa patrie, pour faire un exemple politique." },
+                { textParts: ["L'action de la pièce Antigone se déroule à ", "."], options: ["Thèbes", "Athènes", "Rome", "Paris"], correct: 0, explanation: "Thèbes est la cité grecque antique dirigée par le roi Créon dans le mythe thébain." },
+                { textParts: ["Le ", " commente l'action et explique les règles de la tragédie."], options: ["Chœur", "Prologue", "Garde", "Messager"], correct: 0, explanation: "Le Chœur représente le destin, la voix de la sagesse ou de l'opinion publique qui prend du recul sur le drame." },
+                { textParts: ["Le ", " présente les personnages au début de la pièce."], options: ["Prologue", "Chœur", "Créon", "Garde"], correct: 0, explanation: "Le Prologue est le personnage qui ouvre la pièce, présente les rôles et annonce le destin de chacun." },
+                { textParts: ["La maison où habite Sidi Mohammed s'appelle ", "."], options: ["Dar Chouafa", "Dar Mfadel", "Dar Lalla", "Dar Aicha"], correct: 0, explanation: "La maison de la voyante (Dar Chouafa) rassemble plusieurs familles qui partagent la cour centrale." },
+                { textParts: ["Après Bicêtre, le condamné est transféré à la ", "."], options: ["Conciergerie", "Bicêtre", "l'Hôtel de Ville", "la Bastille"], correct: 0, explanation: "La Conciergerie est l'étape intermédiaire où le condamné attend l'heure du transfert final." },
+                { textParts: ["Le condamné espère jusqu'au bout obtenir sa ", "."], options: ["grâce", "liberté", "richesse", "peine"], correct: 0, explanation: "La grâce royale est l'ultime espoir auquel le condamné se raccroche pour échapper au couperet." },
+                { textParts: ["Le père de Sidi Mohammed doit travailler comme ", " après sa ruine."], options: ["moissonneur", "tisserand", "babouchier", "épicier"], correct: 0, explanation: "Il quitte Fès pour aller travailler comme moissonneur dans la campagne afin de reconstituer son capital." },
+                { textParts: ["Le drame familial dans la Boîte commence par la perte de la ", "."], options: ["bourse", "boîte", "maison", "santé"], correct: 0, explanation: "La perte de la bourse contenant tout son argent dans le souk des bijoutiers ruine temporairement Maâlem Abdeslem." },
+                { textParts: ["La perte de l'argent de Maâlem Abdeslem plonge la famille dans la ", "."], options: ["gêne", "richesse", "joie", "folie"], correct: 0, explanation: "La 'gêne' est le terme pudique employé pour désigner la pauvreté ou les difficultés matérielles soudaines du foyer." },
+                { textParts: ["La pièce d'Anouilh est inspirée de celle de ", "."], options: ["Sophocle", "Euripide", "Eschyle", "Homère"], correct: 0, explanation: "Jean Anouilh s'est inspiré de la célèbre tragédie grecque de Sophocle (Vème siècle avant J.-C.)." },
+                { textParts: ["La ", " d'Antigone représente le quotidien et la tendresse."], options: ["nourrice", "reine", "Ismène", "servante"], correct: 0, explanation: "La Nourrice (ou 'Nounou') incarne l'amour maternel protecteur et simple, loin des enjeux politiques du palais." },
+                { textParts: ["Victor Hugo dénonce la curiosité cruelle des ", " de la guillotine."], options: ["spectateurs", "juges", "gardes", "prêtres"], correct: 0, explanation: "La foule avide de sang qui vient assister à l'exécution comme à un spectacle est vigoureusement condamnée par Hugo." },
+                { textParts: ["Par ce plaidoyer, Hugo combat pour l'", "."], options: ["humanité", "loi", "justice", "vengeance"], correct: 0, explanation: "Le roman défend une vision humaniste de la justice qui proscrit la violence légale exercée par l'État." }
+            ],
+            discours: [
+                { textParts: ["Créon affirma : « Je suis le roi. » ➔ Créon affirma qu'il ", " le roi."], options: ["était", "fût", "est", "serait"], correct: 0, explanation: "Verbe introducteur au passé ('affirma') ➔ Le présent du discours direct devient Imparfait ('était')." },
+                { textParts: ["Ismène supplia Antigone : « Ne fais pas ça ! » ➔ Ismène supplia sa sœur ", " pas faire ça."], options: ["de ne", "qu'elle ne", "à ne", "ne de"], correct: 0, explanation: "L'impératif négatif au discours direct se transforme en 'de ne pas + infinitif'." },
+                { textParts: ["Le garde cria : « Nous avons attrapé la fille ! » ➔ Le garde cria qu'ils ", " la fille."], options: ["avaient attrapé", "ont attrapé", "eussent attrapé", "auraient attrapé"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le passé composé devient un Plus-que-parfait ('avaient attrapé')." },
+                { textParts: ["Hémon jura : « Je ne pourrai pas vivre sans elle. » ➔ Il jura qu'il ne ", " pas vivre sans elle."], options: ["pourrait", "pourra", "pouvoit", "eût pu"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le futur simple devient un Conditionnel Présent ('pourrait')." },
+                { textParts: ["Le Chœur annonce : « Antigone va mourir bientôt. » ➔ Le Chœur annonce qu'Antigone ", " mourir bientôt."], options: ["va", "allait", "irait", "allât"], correct: 0, explanation: "PIÈGE ! Le verbe introducteur est au PRÉSENT ('annonce') ➔ On ne change pas le temps du verbe du discours direct." },
+                { textParts: ["Le condamné pensa : « Je serai exécuté à quatre heures. » ➔ Il pensa qu'il ", " exécuté à quatre heures."], options: ["serait", "sera", "fut", "était"], correct: 0, explanation: "Le verbe introducteur au passé ('pensa') change le futur simple ('serai') en conditionnel présent ('serait')." },
+                { textParts: ["Ma mère demanda : « As-tu vu ma boîte ? » ➔ Ma mère me demanda si j'", " ma boîte."], options: ["avais vu", "ai vu", "aurais vu", "eusse vu"], correct: 0, explanation: "Verbe introducteur au passé ('demanda') et question totale ➔ L'interrogation devient 'si' et le passé composé devient plus-que-parfait." },
+                { textParts: ["La nourrice criait : « D'où viens-tu ? » ➔ La nourrice me demandait d'où je ", "."], options: ["venais", "viens", "serais venu", "fus venu"], correct: 0, explanation: "Verbe introducteur au passé ('demandait') ➔ Le présent ('viens') devient imparfait ('venais')." },
+                { textParts: ["Lalla Aicha dit : « Je viendrai demain. » ➔ Lalla Aicha dit qu'elle ", " le lendemain."], options: ["viendrait", "viendra", "venait", "fût venue"], correct: 0, explanation: "Verbe introducteur au passé ('dit') ➔ Le futur devient conditionnel présent, et 'demain' devient 'le lendemain'." },
+                { textParts: ["Le juge déclara : « Le verdict est irréversible. » ➔ Le juge déclara que le verdict ", " irréversible."], options: ["était", "est", "fût", "serait"], correct: 0, explanation: "Verbe introducteur au passé ('déclara') ➔ Le présent du discours direct ('est') devient imparfait ('était')." },
+                { textParts: ["Le condamné s'exclama : « J'ai peur ! » ➔ Le condamné s'exclama qu'il ", " peur."], options: ["avait", "a", "eut", "aurait"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le présent ('ai') devient imparfait ('avait')." },
+                { textParts: ["Ismène expliqua : « Je ne veux pas mourir. » ➔ Ismène expliqua qu'elle ne ", " pas mourir."], options: ["voulait", "veut", "voulût", "voudrait"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le présent du discours direct devient imparfait ('voulait')." },
+                { textParts: ["Créon ordonna aux gardes : « Emmenez-la ! » ➔ Créon ordonna aux gardes de l'", "."], options: ["emmener", "emmenèrent", "emmèneront", "emmenassent"], correct: 0, explanation: "L'impératif au discours direct ('Emmenez-la') devient 'de + infinitif' au discours indirect." },
+                { textParts: ["Le narrateur avoua : « J'ai perdu tout espoir. » ➔ Le narrateur avoua qu'il ", " tout espoir."], options: ["avait perdu", "a perdu", "perdit", "perdrait"], correct: 0, explanation: "Verbe introducteur au passé ('avoua') ➔ Le passé composé devient plus-que-parfait ('avait perdu')." },
+                { textParts: ["Lalla Zoubida raconte : « Mon fils aime la solitude. » ➔ Lalla Zoubida raconte que son fils ", " la solitude."], options: ["aime", "aimait", "aimera", "aimât"], correct: 0, explanation: "Verbe introducteur au présent ('raconte') ➔ Le temps du discours direct ('aime') reste inchangé." },
+                { textParts: ["Hémon cria à son père : « Tu es fou ! » ➔ Hémon cria à son père qu'il ", " fou."], options: ["était", "est", "fut", "serait"], correct: 0, explanation: "Verbe introducteur au passé ('cria') ➔ Le présent ('es') devient imparfait ('était')." },
+                { textParts: ["Le prêtre murmura : « Dieu vous pardonnera. » ➔ Le prêtre murmura que Dieu lui ", "."], options: ["pardonnerait", "pardonnera", "pardonna", "pardonnât"], correct: 0, explanation: "Verbe introducteur au passé ('murmura') ➔ Le futur simple devient conditionnel présent ('pardonnerait')." },
+                { textParts: ["Sidi Mohammed promit : « Je serai sage. » ➔ Sidi Mohammed promit qu'il ", " sage."], options: ["serait", "sera", "était", "fût"], correct: 0, explanation: "Verbe introducteur au passé ('promit') ➔ Le futur simple devient conditionnel présent ('serait')." },
+                { textParts: ["Le gardien dit au prisonnier : « Votre fille est ici. » ➔ Le gardien dit au prisonnier que sa fille ", " là."], options: ["était", "est", "fut", "serait"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le présent ('est') devient imparfait ('était') et l'indicateur 'ici' devient 'là'." },
+                { textParts: ["Elle demanda : « Es-tu fatigué ? » ➔ Elle lui demanda s'il ", " fatigué."], options: ["était", "est", "fût", "sera"], correct: 0, explanation: "Verbe introducteur au passé ➔ L'interrogation totale devient 'si' suivie de l'imparfait ('était')." },
+                { textParts: ["Le condamné demande : « Puis-je écrire ? » ➔ Le condamné demande s'il ", " écrire."], options: ["peut", "pouvait", "pût", "pourra"], correct: 0, explanation: "Verbe introducteur au présent ('demande') ➔ Le présent reste inchangé ('peut')." },
+                { textParts: ["Le roi affirma : « Je ferai mon devoir. » ➔ Le roi affirma qu'il ", " son devoir."], options: ["ferait", "fera", "faisait", "fît"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le futur simple ('ferai') devient conditionnel présent ('ferait')." },
+                { textParts: ["Les gardes ricanèrent : « Nous serons récompensés. » ➔ Les gardes ricanèrent qu'ils ", " récompensés."], options: ["seraient", "seront", "étaient", "fussent"], correct: 0, explanation: "Verbe introducteur au passé ('ricanèrent') ➔ Le futur ('serons') devient conditionnel présent ('seraient')." },
+                { textParts: ["Ismène avoua : « J'ai aidé ma sœur. » ➔ Ismène avoua qu'elle ", " ma sœur."], options: ["avait aidé", "a aidé", "aiderait", "eût aidé"], correct: 0, explanation: "Verbe introducteur au passé ('avoua') ➔ Le passé composé ('ai aidé') devient plus-que-parfait ('avait aidé')." },
+                { textParts: ["Le condamné demanda : « Écrivez à ma fille. » ➔ Il demande qu'on ", " à sa fille."], options: ["écrivît", "écrive", "écrirait", "écrira"], correct: 0, explanation: "Après un verbe de volonté au passé ('demanda qu'on...'), on emploie le subjonctif imparfait dans un registre soutenu ('écrivît')." },
+                { textParts: ["La mère répétait : « Tu vas guérir. » ➔ La mère répétait qu'il ", " guérir."], options: ["allait", "va", "irait", "allât"], correct: 0, explanation: "Verbe introducteur au passé ('répétait') ➔ Le présent ('vas') devient imparfait ('allait')." },
+                { textParts: ["Le directeur annonça : « Le voyage est annulé. » ➔ Le directeur annonça que le voyage ", " annulé."], options: ["était", "est", "fut", "serait"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le présent devient imparfait ('était')." },
+                { textParts: ["Hémon déclara : « Je ne plierai pas. » ➔ Hémon déclara qu'il ne ", " pas."], options: ["plierait", "pliera", "pliait", "pliât"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le futur simple ('plierai') devient conditionnel présent ('plierait')." },
+                { textParts: ["Le messager raconta : « Antigone s'est pendue. » ➔ Le messager raconta qu'Antigone s'", " pendue."], options: ["était", "est", "fut", "serait"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le passé composé pronominal s'accorde au plus-que-parfait ('était pendue')." },
+                { textParts: ["Sidi Mohammed pense : « L'école coranique est un enfer. » ➔ Sidi Mohammed pense que l'école coranique ", " un enfer."], options: ["est", "était", "fut", "serait"], correct: 0, explanation: "Verbe introducteur au présent ('pense') ➔ Le présent reste inchangé." },
+                { textParts: ["Le procureur répliqua : « Vous serez exécuté aujourd'hui. » ➔ Le procureur répliqua qu'il ", " exécuté ce jour-là."], options: ["serait", "sera", "est", "était"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le futur simple devient conditionnel présent et 'aujourd'hui' devient 'ce jour-là'." },
+                { textParts: ["L'avocat assura : « Nous gagnerons le procès. » ➔ L'avocat assura qu'ils ", " le procès."], options: ["gagneraient", "gagneront", "gagnaient", "gagnassent"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le futur simple devient conditionnel présent ('gagneraient')." },
+                { textParts: ["Le prisonnier répéta : « Je veux la vie. » ➔ Le prisonnier répéta qu'il ", " la vie."], options: ["voulait", "veut", "voudrait", "voulût"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le présent du discours direct devient imparfait ('voulait')." },
+                { textParts: ["Créon l'avertit : « Tu mourras si tu y vas. » ➔ Créon l'avertit qu'elle ", " si elle y allait."], options: ["mourrait", "mourra", "mourait", "mourût"], correct: 0, explanation: "Verbe introducteur au passé ➔ Le futur simple devient conditionnel présent ('mourrait') et l'imparfait s'applique dans la subordonnée hypothétique." },
+                { textParts: ["Le greffier lui demanda : « Comprenez-vous la sentence ? » ➔ Le greffier lui demanda s'il ", " la sentence."], options: ["comprenait", "comprend", "comprendrait", "comprît"], correct: 0, explanation: "Verbe introducteur au passé ➔ L'interrogation totale indirecte avec 'si' se conjugue à l'imparfait ('comprenait')." }
+            ],
+            registres: [
+                { textParts: ["« Je ne veux pas mourir ! Non, je ne veux pas mourir ! » Ce cri déchirant relève du registre ", "."], options: ["pathétique", "tragique", "lyrique", "satirique"], correct: 0, explanation: "Le registre pathétique vise à inspirer la pitié et la compassion face à la souffrance et au désespoir." },
+                { textParts: ["« Ô ma fille ! mon enfant ! ma pauvre petite Marie ! » Cette plainte relève du registre ", "."], options: ["lyrique", "pathétique", "fantastique", "polémique"], correct: 0, explanation: "L'expression de l'émotion personnelle avec des exclamations et apostrophes ('Ô') est caractéristique du lyrisme." },
+                { textParts: ["La mort d'Antigone, condamnée par une loi implacable, illustre le registre ", "."], options: ["tragique", "satirique", "épique", "didactique"], correct: 0, explanation: "Le registre tragique met en scène des personnages écrasés par un destin inévitable et une issue fatale." },
+                { textParts: ["Quand Victor Hugo se moque violemment de la foule cruelle de la guillotine, il utilise le registre ", "."], options: ["satirique", "fantastique", "pathétique", "épique"], correct: 0, explanation: "La satire consiste à dénoncer des vices ou des comportements ridicules par la moquerie (parfois grinçante)." },
+                { textParts: ["L'utilisation d'arguments agressifs pour attaquer la peine de mort relève du registre ", "."], options: ["polémique", "lyrique", "élégiaque", "comique"], correct: 0, explanation: "Le registre polémique (du grec polemos = guerre) cherche à attaquer, dénoncer et provoquer le débat avec véhémence." },
+                { textParts: ["« Misérable machine dont le ressort est brisé ! » Cette exclamation du condamné devant son corps affaibli exprime le registre ", "."], options: ["pathétique", "comique", "didactique", "épique"], correct: 0, explanation: "Le registre pathétique s'exprime dans la plainte et l'expression de la souffrance physique et morale pour susciter la pitié." },
+                { textParts: ["« Dans ma boîte, il y avait des clous, des boutons, des perles de verre qui brillaient comme des diamants. » Ce passage relève du registre ", "."], options: ["lyrique", "tragique", "comique", "satirique"], correct: 0, explanation: "Le registre lyrique s'exprime ici par l'évocation poétique et affective des souvenirs et de la sensibilité intime." },
+                { textParts: ["La description grotesque de la vieille Chouffa et de ses rituels bizarres relève parfois du registre ", "."], options: ["ironique", "tragique", "lyrique", "épique"], correct: 0, explanation: "L'ironie et la caricature grotesque des travers d'un personnage appartiennent au registre comique et ironique." },
+                { textParts: ["« Allez-vous-en ! Gardes ! Laissez-moi seule ! » Le ton impérieux d'Antigone relève du registre ", "."], options: ["dramatique", "comique", "didactique", "lyrique"], correct: 0, explanation: "Le registre dramatique se caractérise par l'urgence, les phrases courtes, l'impératif et les conflits en action." },
+                { textParts: ["« Qu'importe que Polynice ait été un traître ou un bon frère ? L'essentiel est que le peuple se taise ! » Ce propos cynique relève du registre ", "."], options: ["ironique", "lyrique", "pathétique", "merveilleux"], correct: 0, explanation: "Le cynisme politique de Créon est mis en valeur par une feinte de désinvolture caractéristique de l'ironie." },
+                { textParts: ["« Ô mon Dieu ! ayez pitié de moi et de ma pauvre enfant ! » Cette prière désespérée relève du registre ", "."], options: ["pathétique", "satirique", "didactique", "comique"], correct: 0, explanation: "Le registre pathétique est sollicité par l'appel à la pitié face au déchirement familial et à la détresse de la mort." },
+                { textParts: ["« Les hommes avec leurs lois stupides et leurs rituels de mort. » Cette attaque violente contre la justice relève du registre ", "."], options: ["polémique", "comique", "lyrique", "fantastique"], correct: 0, explanation: "L'attaque frontale des institutions et le vocabulaire combatif relèvent du registre polémique." },
+                { textParts: ["La condamnation d'un homme à la guillotine par une société se disant civilisée montre le registre ", "."], options: ["tragique", "comique", "merveilleux", "lyrique"], correct: 0, explanation: "Le tragique naît de l'impasse où se trouve l'individu broyé par une machine judiciaire implacable." },
+                { textParts: ["La dispute bruyante et ridicule entre Rahma et Lalla Zoubida à propos de la lessive relève du registre ", "."], options: ["comique", "tragique", "lyrique", "didactique"], correct: 0, explanation: "Le comique de mots et de situation naît de l'exagération et de la trivialité de la querelle de voisinage." },
+                { textParts: ["« Je vous écris ce journal pour que ma souffrance serve de leçon aux législateurs. » Cette visée éducative relève du registre ", "."], options: ["didactique", "pathétique", "satirique", "fantastique"], correct: 0, explanation: "Le registre didactique vise à transmettre un enseignement, une morale ou à faire réfléchir le lecteur." },
+                { textParts: ["« Ma boîte était mon seul refuge, le palais où je régnais en roi solitaire. » Cette métaphore poétique relève du registre ", "."], options: ["lyrique", "satirique", "polémique", "dramatique"], correct: 0, explanation: "L'expression des états d'âme de l'enfant et le langage métaphorique sont caractéristiques du registre lyrique." },
+                { textParts: ["La description effrayante des forçats enchaînés sous la pluie battante à Bicêtre relève du registre ", "."], options: ["pathétique", "comique", "merveilleux", "didactique"], correct: 0, explanation: "La dégradation physique de ces hommes inspire le dégoût et la compassion, propre au registre pathétique." },
+                { textParts: ["« C'est une belle journée pour mourir, n'est-ce pas ? » Cette remarque ironique d'Antigone utilise le registre ", "."], options: ["ironique", "comique", "fantastique", "épique"], correct: 0, explanation: "L'ironie consiste à dire le contraire de ce que l'on pense ou à souligner une contradiction absurde." },
+                { textParts: ["« Le bourreau s'approcha avec ses grands ciseaux et me coupa les cheveux. » Ce récit tendu d'un événement violent relève du registre ", "."], options: ["dramatique", "lyrique", "comique", "satirique"], correct: 0, explanation: "Le registre dramatique maintient la tension par la narration directe d'actions cruciales et irréversibles." },
+                { textParts: ["« Le petit Sidi Mohammed s'imaginait que ses perles de verre lui parlaient. » Cette atmosphère imaginaire relève du registre ", "."], options: ["merveilleux", "satirique", "tragique", "polémique"], correct: 0, explanation: "Le merveilleux introduit le surnaturel et l'enchantement acceptés comme allant de soi par l'enfant." },
+                { textParts: ["« Hémon s'est jeté sur son épée et a rendu le dernier soupir. » Cette fin inévitable et douloureuse relève du registre ", "."], options: ["tragique", "comique", "didactique", "satirique"], correct: 0, explanation: "La mort des protagonistes soumis à une fin fatale et inéluctable définit le registre tragique." },
+                { textParts: ["« Le procureur a parlé d'une voix monotone, comme s'il parlait d'un simple dossier. » Cette dénonciation froide relève du registre ", "."], options: ["satirique", "lyrique", "merveilleux", "fantastique"], correct: 0, explanation: "L'ironie satirique dénonce l'indifférence bureaucratique en la tournant en dérision." },
+                { textParts: ["« La mort est là, tapie dans l'ombre du cachot, qui m'attend. » Cette personnification angoissante relève du registre ", "."], options: ["fantastique", "comique", "didactique", "merveilleux"], correct: 0, explanation: "L'intrusion de l'angoisse et de figures spectrales ou mortifères dans le quotidien relève du registre fantastique." },
+                { textParts: ["« Ah ! le beau roi Créon avec ses grands gardes et sa couronne ! » Ce mépris affiché par Antigone relève du registre ", "."], options: ["satirique", "lyrique", "didactique", "tragique"], correct: 0, explanation: "Antigone utilise la satire et la moquerie pour rejeter l'autorité royale de Créon." },
+                { textParts: ["« Mes chers jouets, mes seuls amis de Dar Chouafa. » Cette expression nostalgique relève du registre ", "."], options: ["lyrique", "comique", "polémique", "didactique"], correct: 0, explanation: "L'attachement mélancolique et intime aux objets de l'enfance relève du registre lyrique." },
+                { textParts: ["La révolte d'Antigone contre la volonté du roi de priver Polynice de sépulture relève du registre ", "."], options: ["tragique", "comique", "merveilleux", "didactique"], correct: 0, explanation: "Le conflit insoluble opposant la conscience individuelle à la force publique est l'essence même du tragique." },
+                { textParts: ["Le portrait moqueur du Fqih somnolant à l'école coranique relève du registre ", "."], options: ["satirique", "lyrique", "tragique", "fantastique"], correct: 0, explanation: "La satire s'exprime dans la critique comique et moqueuse des travers de l'instituteur traditionnel." },
+                { textParts: ["« Il faut que tout le monde sache à quel point cette justice est sourde. » Ce ton de dénonciation publique relève du registre ", "."], options: ["polémique", "comique", "merveilleux", "lyrique"], correct: 0, explanation: "L'appel à l'indignation collective et l'affrontement verbal relèvent du registre polémique." },
+                { textParts: ["La folie soudaine du condamné croyant voir des spectres dans sa cellule relève du registre ", "."], options: ["fantastique", "comique", "didactique", "lyrique"], correct: 0, explanation: "Le registre fantastique s'établit par le doute sur la réalité des visions d'épouvante du narrateur." },
+                { textParts: ["« Le condamné grimaçait sous les huées de la foule en délire. » Cette scène pénible relève du registre ", "."], options: ["dramatique", "comique", "merveilleux", "lyrique"], correct: 0, explanation: "Le registre dramatique rend compte de la confrontation tendue et immédiate de l'individu face à son destin public." },
+                { textParts: ["« Ne pleure pas, ma bonne nourrice, tout va bien se passer. » Ce dialogue tendre et consolateur relève du registre ", "."], options: ["pathétique", "satirique", "didactique", "fantastique"], correct: 0, explanation: "La tendresse impuissante face à la fatalité de la séparation suscite l'émotion pathétique." },
+                { textParts: ["« Les juges ont prononcé la sentence avec une indifférence révoltante. » Cette critique indignée relève du registre ", "."], options: ["polémique", "merveilleux", "comique", "lyrique"], correct: 0, explanation: "L'indignation contre l'injustice institutionnelle prend ici un ton résolument polémique." },
+                { textParts: ["« Si tu savais comme c'est petit, une reine Antigone devant tout un peuple. » Ce propos de Créon relève du registre ", "."], options: ["tragique", "comique", "merveilleux", "fantastique"], correct: 0, explanation: "La confrontation de la solitude individuelle face au poids de la collectivité et du destin est purement tragique." },
+                { textParts: ["Le récit enthousiaste des visites au sanctuaire de Sidi Ali Boughaleb relève du registre ", "."], options: ["lyrique", "tragique", "satirique", "polémique"], correct: 0, explanation: "L'exaltation des sentiments nostalgiques et religieux de l'enfance relève du lyrisme." },
+                { textParts: ["« Quatre heures ! Dans une heure, je serai mort ! » Ce cri d'effroi face à la fin imminente relève du registre ", "."], options: ["dramatique", "comique", "didactique", "merveilleux"], correct: 0, explanation: "L'irruption de la panique face au décompte final de la vie instaure un climat d'angoisse dramatique." }
+            ]
+        };
+
+        const impossibleQuestions = [
+            "La modernité et la mondialisation ont-elles définitivement détruit les valeurs de solidarité et d'entraide de la société marocaine traditionnelle ? (Plan dialectique exigé)",
+            "Peut-on justifier le fait de briser la loi et de mettre en péril la stabilité de l'État pour défendre ses convictions religieuses ou familiales ? (Sujet type Antigone)",
+            "La peine de mort est-elle une véritable justice rendue aux victimes, ou simplement un acte de vengeance barbare déguisé par la loi ? (Plan analytique ou dialectique)",
+            "La superstition et le charlatanisme sont-ils seulement le reflet de l'ignorance, ou répondent-ils à un réel besoin psychologique face à la misère et l'angoisse ?",
+            "Certains jeunes estiment que la rébellion systématique est le seul moyen d'affirmer leur identité face au monde des adultes. Ce comportement vous paraît-il constructif ?"
+        ];
+
+        const marathonDatabase = [
+            { textParts: ["Elle s'est ", " gifler par sa rivale devant tout le monde."], options: ["fait", "faite", "faits", "faites"], correct: 0, explanation: "Le participe passé du verbe *faire* suivi d'un infinitif est toujours invariable (*fait*)." },
+            { textParts: ["Elles se sont ", " pendant des années sans jamais s'entendre."], options: ["succédé", "succédées", "succédés", "succéder"], correct: 0, explanation: "Le verbe *se succéder* est indirect (succéder à quelqu'un). Le pronom *se* est COI, le participe passé est donc invariable." },
+            { textParts: ["Ils se sont ", " à critiquer les décisions du roi Créon."], options: ["plu", "plus", "plue", "plues"], correct: 0, explanation: "Le participe passé des verbes *se plaire*, *se complaire*, *se déplaire* est toujours invariable (*plu*)." },
+            { textParts: ["Les gardes du palais ont reçu de nouveaux ", "."], options: ["coffres-forts", "coffre-forts", "coffres-fort", "coffre-fortes"], correct: 0, explanation: "Dans les mots composés formés d'un adjectif et d'un nom, les deux éléments prennent la marque du pluriel (*coffres-forts*)." },
+            { textParts: ["Ils ont utilisé des ", " pour ouvrir les portes du cachot."], options: ["passe-partout", "passes-partout", "passe-partouts", "passes-partouts"], correct: 0, explanation: "Le mot composé *passe-partout* est invariable au pluriel." },
+            { textParts: ["Le condamné attend ", " l'annonce de sa grâce."], options: ["patiemment", "patientement", "patiement", "patianment"], correct: 0, explanation: "Les adjectifs se terminant par *-ent* forment leur adverbe en *-emment* (*patient* ➔ *patiemment*)." },
+            { textParts: ["Ismène refuse de s'opposer ", " à la volonté de Créon."], options: ["constamment", "constament", "constanment", "constantement"], correct: 0, explanation: "Les adjectifs se terminant par *-ant* forment leur adverbe en *-amment* (*constant* ➔ *constamment*)." },
+            { textParts: ["Si j'écris ce journal, j'", " peut-être une paix intérieure."], options: ["acquerrai", "acquérirai", "acquerrais", "acquerai"], correct: 0, explanation: "Le verbe *acquérir* s'écrit avec deux 'r' au futur simple de l'indicatif (*j'acquerrai*)." },
+            { textParts: ["Si la nourrice le savait, elle ", " l'empêcher de sortir."], options: ["courrait", "courerait", "courait", "courira"], correct: 0, explanation: "Le verbe *courir* prend deux 'r' au conditionnel présent (*elle courrait*), alors que l'imparfait n'en prend qu'un (*elle courait*)." },
+            { textParts: ["", " soient les arguments de Créon, Antigone n'écoute pas."], options: ["Quels que", "Quelque", "Quelques", "Quel que"], correct: 0, explanation: "Devant le verbe être au subjonctif, on écrit *quel(s) que* en deux mots, accordé avec le sujet masculin pluriel *arguments*." },
+            { textParts: ["", " cruels que soient les gardes, ils restent des hommes."], options: ["Quelque", "Quels que", "Quelques", "Quelle que"], correct: 0, explanation: "Devant un adjectif qualificatif, *quelque* a une valeur d'adverbe et reste invariable." },
+            { textParts: ["Le condamné se souvient des yeux ", " de sa petite Marie."], options: ["marron", "marrons", "marrone", "marronnes"], correct: 0, explanation: "Les adjectifs de couleur dérivés de noms (comme *marron*) sont invariables au pluriel." },
+            { textParts: ["Créon porte une toge aux reflets ", "."], options: ["bleu foncé", "bleus foncés", "bleu foncés", "bleus foncé"], correct: 0, explanation: "Les adjectifs de couleur composés sont totalement invariables." },
+            { textParts: ["Antigone est ", " honteuse de s'être fait prendre."], options: ["toute", "tout", "toutes", "tous"], correct: 0, explanation: "L'adverbe *tout* s'accorde exceptionnellement devant un adjectif féminin commençant par une consonne ou un 'h' aspiré (*honteuse*)." },
+            { textParts: ["Ismène est ", " ébahie par la détermination de sa sœur."], options: ["tout", "toute", "toutes", "tous"], correct: 0, explanation: "Devant un adjectif féminin commençant par une voyelle ou un 'h' muet, l'adverbe *tout* reste invariable." },
+            { textParts: ["Créon exige que nous ", " en sa justice d'État."], options: ["croyions", "croyons", "croiyons", "croirions"], correct: 0, explanation: "Au subjonctif présent, les verbes en *-yer* et les verbes comme *croire* prennent un 'i' après le 'y' aux 1re et 2e personnes du pluriel (*que nous croyions*)." },
+            { textParts: ["Il est impératif que vous ", " sa détresse avant de le juger."], options: ["voyiez", "voyez", "voiyiez", "voiriez"], correct: 0, explanation: "Au subjonctif présent, on écrit *que vous voyiez* (avec 'yi') pour le distinguer de l'indicatif *vous voyez*." },
+            { textParts: ["Il eût fallu qu'il ", " une dernière lueur d'espoir."], options: ["eût", "eut", "eusse", "eusses"], correct: 0, explanation: "Le subjonctif imparfait d'avoir à la 3e personne du singulier prend un accent circonflexe sur le 'u' : *qu'il eût*." },
+            { textParts: ["Les gardes le ", " devant le tribunal dans un silence de mort."], options: ["conduisirent", "conduisèrent", "conduirent", "conduissèrent"], correct: 0, explanation: "Le passé simple du verbe *conduire* se forme avec le radical en -s- (*ils conduisirent*)." },
+            { textParts: ["L'auteur ", " de témoigner de l'horreur des prisons."], options: ["résolut", "résouda", "résoudit", "résolva"], correct: 0, explanation: "Le passé simple de *résoudre* est *je résolus, tu résolus, il résolut*." },
+            { textParts: ["La sentence tomba, et de longues minutes de silence s'étaient ", "."], options: ["ensuivies", "ensuivi", "ensuivis", "ensuivie"], correct: 0, explanation: "Le verbe *s'ensuivre* s'accorde avec le sujet *minutes* (féminin pluriel), car c'est un verbe essentiellement pronominal." },
+            { textParts: ["La grâce royale n'était pas ", " dans le décret."], options: ["incluse", "inclue", "inclu", "inclus"], correct: 0, explanation: "Le participe passé de *inclure* est *inclus / incluse* (contrairement à *exclure* qui fait *exclu*)." },
+            { textParts: ["Des lettres d'appel, j'en ai ", " des dizaines."], options: ["écrit", "écrits", "écrite", "écrites"], correct: 0, explanation: "Le participe passé précédé du pronom *en* (COD) reste invariable en français traditionnel." },
+            { textParts: ["Le condamné attend depuis une ", " heure dans le greffe."], options: ["demi-", "demie-", "demi", "demie"], correct: 0, explanation: "Placé devant le nom, *demi* est invariable et se lie par un trait d'union." },
+            { textParts: ["Il ne lui reste plus qu'une heure et ", " à vivre."], options: ["demie", "demi", "demi-", "demie-"], correct: 0, explanation: "Placé après le nom, *demi* s'accorde en genre uniquement (*une heure et demie*)." },
+            { textParts: ["Il a dû marcher ", "-pieds dans le froid de la cellule."], options: ["nu", "nue", "nus", "nues"], correct: 0, explanation: "L'adjectif *nu* placé devant le nom est invariable et prend un trait d'union (*nu-pieds*)." },
+            { textParts: ["Le pauvre forçat marchait les pieds ", " dans la boue."], options: ["nus", "nu", "nue", "nues"], correct: 0, explanation: "Placé après le nom, *nu* s'accorde en genre et en nombre avec le nom (*les pieds nus*)." },
+            { textParts: ["", " joint les pièces justificatives pour la grâce."], options: ["Ci-", "Ci-jointe", "Ci-jointes", "Ci-joints"], correct: 0, explanation: "Placé en début de phrase ou devant un nom sans déterminant, *ci-joint* reste invariable." },
+            { textParts: ["La lettre ", " montre la détresse du prisonnier."], options: ["ci-jointe", "ci-joint", "ci-jointes", "ci-joints"], correct: 0, explanation: "Placé après le nom, *ci-joint* s'accorde en genre et en nombre (*la lettre ci-jointe*)." },
+            { textParts: ["Je ne ", " jamais oublier ce visage terrifié."], options: ["pourrai", "pourai", "pourrais", "pourais"], correct: 0, explanation: "Le futur simple du verbe *pouvoir* s'écrit avec deux 'r' (*je pourrai*)." },
+            { textParts: ["Créon voulait qu'on le ", " au cachot sur-le-champ."], options: ["jetât", "jetat", "jettât", "jetasse"], correct: 0, explanation: "Le subjonctif imparfait de *jeter* s'écrit avec un accent circonflexe sur le 'a' (*qu'il jetât*) et un seul 't'." },
+            { textParts: ["Tu es ", " appliquer la loi du royaume sans discuter."], options: ["censé", "sensé", "sansé", "censées"], correct: 0, explanation: "*Censé* (avec un c) signifie 'supposé'." },
+            { textParts: ["", " tu fasses, Créon ne t'écoutera pas."], options: ["Quoi que", "Quoique", "Quoi-que", "Quoiques"], correct: 0, explanation: "*Quoi que* (en deux mots) signifie 'quelle que soit la chose que' (suivi du subjonctif)." },
+            { textParts: ["", " elle soit jeune, Antigone affronte son oncle avec courage."], options: ["Quoique", "Quoi que", "Quoi-que", "Quoiques"], correct: 0, explanation: "*Quoique* (en un seul mot) est une conjonction signifiant 'bien que' (suivie du subjonctif)." },
+            { textParts: ["Ne ", " pas à quelle heure il mourrait, il devint fou."], options: ["sachant", "savant", "sachante", "savoirant"], correct: 0, explanation: "Le participe présent de *savoir* est irrégulier : *sachant*." },
+            { textParts: ["Le Chœur ", " les messagers annoncer la mort d'Hémon."], options: ["enverra", "envoyera", "envoiera", "envera"], correct: 0, explanation: "Le verbe *envoyer* a un futur irrégulier en *enverra* (avec deux 'r')." },
+            { textParts: ["Sa désobéissance lui ", " la peine de mort."], options: ["vaudra", "valera", "valdra", "vaudras"], correct: 0, explanation: "Le futur simple du verbe *valoir* est *il vaudra*." },
+            { textParts: ["Le garde ", " la colère de Créon et se tut."], options: ["craignit", "craint", "craigna", "craignît"], correct: 0, explanation: "Le passé simple du verbe *craindre* est *il craignit*." },
+            { textParts: ["Le condamné se souvient du jour où sa fille ", "."], options: ["naquit", "nacquit", "naquît", "nâquit"], correct: 0, explanation: "Le passé simple de *naître* est *il naquit* (sans accent circonflexe)." },
+            { textParts: ["Je ", " bien voir Marie avant de mourir."], options: ["voudrais", "voudrai", "voulais", "voudrasse"], correct: 0, explanation: "Le conditionnel présent de *vouloir* à la 1re personne du singulier prend un 's' (*je voudrais*)." },
+            { textParts: ["Il a ", " renoncer à sa boîte pour toujours."], options: ["dû", "du", "due", "dus"], correct: 0, explanation: "Le participe passé masculin singulier du verbe *devoir* prend un accent circonflexe (*dû*) pour le distinguer de l'article *du*." },
+            { textParts: ["La nourrice ", " donna un baiser chaleureux avant leur départ."], options: ["leur", "leurs", "leure", "leures"], correct: 0, explanation: "Devant un verbe, *leur* est un pronom personnel COI et reste toujours invariable." },
+            { textParts: ["Ils ont versé toutes ", " larmes face au cadavre."], options: ["leurs", "leur", "leures", "leurent"], correct: 0, explanation: "Devant un nom au pluriel, *leurs* est un adjectif possessif et s'accorde en nombre (*leurs larmes*)." },
+            { textParts: ["Créon n'aurait pas toléré qu'Hémon ", " s'opposer à lui."], options: ["vînt", "vint", "vienne", "vinssent"], correct: 0, explanation: "Le subjonctif imparfait de *venir* s'écrit avec un accent circonflexe sur le 'i' (*qu'il vînt*)." },
+            { textParts: ["Antigone refuse de céder, même si elle sait qu'elle ", " aujourd'hui."], options: ["meurt", "mourra", "mourait", "mourût"], correct: 0, explanation: "Après la conjonction *même si*, on emploie l'indicatif présent (*meurt*) ou imparfait, jamais le futur." },
+            { textParts: ["Lalla Zoubida s'est ", " pour aller au bain maure."], options: ["absentée", "absenté", "absentés", "absentées"], correct: 0, explanation: "Le verbe *s'absenter* étant essentiellement pronominal, son participe s'accorde avec le sujet (*Lalla Zoubida*)." },
+            { textParts: ["Elles se sont ", " les mains à la fontaine."], options: ["lavé", "lavées", "lavés", "laver"], correct: 0, explanation: "Le COD est *les mains*, placé après le verbe. Le participe reste invariable." },
+            { textParts: ["Les juges ne ", " rien faire contre la loi."], options: ["purent", "pourent", "pussent", "pouvaient"], correct: 0, explanation: "Le passé simple de *pouvoir* à la 3e personne du pluriel est *ils purent*." },
+            { textParts: ["Il importe que nous ", " preuve de clémence."], options: ["fassions", "faisions", "faisons", "fussions"], correct: 0, explanation: "Le subjonctif présent du verbe *faire* se forme sur le radical *fass-* (*que nous fassions*)." },
+            { textParts: ["Je ", " bientôt si ma demande de grâce est acceptée."], options: ["saurai", "saurais", "savoirai", "sauras"], correct: 0, explanation: "Le futur simple du verbe *savoir* est *je saurai*." }
+        ];
+
+        const modulesInfo = [
+            { id: 'orthographe', title: 'Orthographe & Accords', desc: 'Bannis les fautes bêtes.', icon: 'ph-warning', color: 'rose' },
+            { id: 'connecteurs', title: 'Connecteurs Logiques', desc: 'Structure tes arguments.', icon: 'ph-link', color: 'blue' },
+            { id: 'argumentation', title: 'Voc. Argumentatif', desc: 'Concepts clés Q9 & Q10.', icon: 'ph-chat-circle-text', color: 'emerald' },
+            { id: 'oeuvres', title: 'Lexique des Œuvres', desc: 'Vocabulaire à placer.', icon: 'ph-book-open', color: 'purple' },
+            { id: 'discours', title: 'Discours Dir / Indir', desc: 'Les pièges de transformation.', icon: 'ph-quotes', color: 'orange' },
+            { id: 'registres', title: 'Registres Littéraires', desc: 'Identifie la tonalité du texte.', icon: 'ph-theater-comedy', color: 'indigo' }
+        ];
+
+        let state = {
+            view: 'home', // home, playing, result, prodEcrite, stressSimulator, moduleSelect, generatingQuiz, marathon
+            activeModule: null, activeQuestions: [], currentQIndex: 0, score: 0,
+            selectedAnswer: null, currentOptionsShuffled: [], isAnswerChecked: false, mistakes: [],
+            selectedModuleId: null, iaError: null,
+            // Prod Ecrite
+            prodState: { step: 'writing', subject: '', text: '', errors: [], currentErrIdx: 0, attempts: 0, feedback: null, timeLeft: 2700, timerInterval: null },
+            // Stress Simulator
+            stressState: { step: 'intro', subject: '', text: '', feedbackHtml: '', timeLeft: 300, timerInterval: null },
+            // Marathon State
+            marathonState: { active: false, questions: [], currentIndex: 0, currentStreak: 0, maxStreak: 0, selectedAnswer: null, isAnswerChecked: false, currentOptionsShuffled: [] }
+        };
+
+        const loadStats = () => JSON.parse(localStorage.getItem('defiZeroFauteStats')) || {};
+        const saveStat = (moduleId, score, total) => {
+            const stats = loadStats();
+            if (!stats[moduleId] || score > stats[moduleId].score) {
+                stats[moduleId] = { score, total };
+                localStorage.setItem('defiZeroFauteStats', JSON.stringify(stats));
+            }
+        };
+
+        // Shuffle utility
+        function shuffleArray(array) {
+            let shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        function toggleSettings() {
+            const modal = document.getElementById('settings-modal');
+            if (modal.classList.contains('hidden')) {
+                document.getElementById('groq-api-key').value = localStorage.getItem('defiZeroFauteGroqKey') || '';
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+
+        function saveGroqKey() {
+            const key = document.getElementById('groq-api-key').value.trim();
+            if (key) localStorage.setItem('defiZeroFauteGroqKey', key);
+            else localStorage.removeItem('defiZeroFauteGroqKey');
+            toggleSettings();
+            render();
+        }
+
+        // --- THE GROQ API BRIDGE ---
+        async function fetchFromGroq(sysPrompt, userPrompt, jsonMode = false) {
+            const key = localStorage.getItem('defiZeroFauteGroqKey');
+            if (!key) throw new Error("Clé API Groq manquante.");
+
+            const payload = {
+                model: GROQ_MODEL,
+                messages: [
+                    { role: "system", content: sysPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                temperature: 0.3,
+                max_completion_tokens: 1024
+            };
+            if (jsonMode) payload.response_format = { type: "json_object" };
+
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error?.message || "Erreur de l'API Groq");
+            }
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        window.startMarathon = function () {
+            clearInterval(state.prodState.timerInterval);
+            clearInterval(state.stressState.timerInterval);
+            state.view = 'marathon';
+            state.marathonState = {
+                active: true,
+                questions: shuffleArray(marathonDatabase),
+                currentIndex: 0,
+                currentStreak: 0,
+                maxStreak: parseInt(localStorage.getItem('defiZeroFauteMarathonMax') || '0'),
+                selectedAnswer: null,
+                isAnswerChecked: false,
+                currentOptionsShuffled: []
+            };
+            const q = state.marathonState.questions[0];
+            const optionsMap = q.options.map((opt, idx) => ({ text: opt, originalIdx: idx }));
+            state.marathonState.currentOptionsShuffled = shuffleArray(optionsMap);
+            render();
+        };
+
+        window.handleMarathonSelect = function (index) {
+            if (state.marathonState.isAnswerChecked) return;
+            state.marathonState.selectedAnswer = index;
+            render();
+        };
+
+        window.checkMarathonAnswer = function () {
+            const mState = state.marathonState;
+            if (mState.selectedAnswer === null) return;
+            mState.isAnswerChecked = true;
+
+            const q = mState.questions[mState.currentIndex];
+            const chosen = mState.currentOptionsShuffled[mState.selectedAnswer];
+
+            if (chosen.originalIdx === q.correct) {
+                mState.currentStreak++;
+                if (mState.currentStreak > mState.maxStreak) {
+                    mState.maxStreak = mState.currentStreak;
+                    localStorage.setItem('defiZeroFauteMarathonMax', mState.maxStreak.toString());
+                }
+            }
+            render();
+        };
+
+        window.nextMarathonQuestion = function () {
+            const mState = state.marathonState;
+            const q = mState.questions[mState.currentIndex];
+            const chosen = mState.currentOptionsShuffled[mState.selectedAnswer];
+            const isCorrect = chosen.originalIdx === q.correct;
+
+            if (isCorrect) {
+                if (mState.currentStreak >= 35) {
+                    render();
+                    return;
+                }
+
+                mState.currentIndex++;
+                if (mState.currentIndex >= mState.questions.length) {
+                    mState.questions = shuffleArray(marathonDatabase);
+                    mState.currentIndex = 0;
+                }
+
+                mState.selectedAnswer = null;
+                mState.isAnswerChecked = false;
+                const nextQ = mState.questions[mState.currentIndex];
+                const optionsMap = nextQ.options.map((opt, idx) => ({ text: opt, originalIdx: idx }));
+                mState.currentOptionsShuffled = shuffleArray(optionsMap);
+            } else {
+                startMarathon();
+            }
+            render();
+        };
+
+        window.setView = function (view) {
+            clearInterval(state.prodState.timerInterval);
+            clearInterval(state.stressState.timerInterval);
+            state.view = view;
+            render();
+        };
+
+        window.selectModule = function (moduleId) {
+            state.selectedModuleId = moduleId;
+            setView('moduleSelect');
+        };
+
+        window.startModule = function (moduleId) {
+            state.activeModule = moduleId;
+            state.activeQuestions = shuffleArray(questionDatabase[moduleId]);
+            state.currentQIndex = 0;
+            state.score = 0;
+            state.selectedAnswer = null;
+            state.isAnswerChecked = false;
+            state.mistakes = [];
+            state.view = 'playing';
+
+            const q = state.activeQuestions[0];
+            const optionsMap = q.options.map((opt, idx) => ({ text: opt, originalIdx: idx }));
+            state.currentOptionsShuffled = shuffleArray(optionsMap);
+            render();
+        };
+
+        window.startModuleIA = async function (moduleId) {
+            if (!localStorage.getItem('defiZeroFauteGroqKey')) return toggleSettings();
+
+            state.activeModule = moduleId;
+            state.view = 'generatingQuiz';
+            state.iaError = null;
+            render();
+
+            const mod = modulesInfo.find(m => m.id === moduleId);
+
+            const sysPrompt = `Tu es un examinateur officiel du Baccalauréat de français (1ère année Bac Maroc).
+Génère un questionnaire de type QCM de 5 questions uniques, d'un niveau très difficile et piégeux pour la catégorie de cours : ${mod.title}.
+Ces questions doivent porter exclusivement sur les 3 œuvres au programme (La Boîte à Merveilles, Antigone, Le Dernier Jour d'un Condamné) ou sur l'analyse de texte/l'argumentation s'y rattachant.
+
+RÈGLES FACTUELLES ABSOLUES SUR LES ŒUVRES (Ne commets jamais d'erreur de fait ou d'attribution) :
+1. "La Boîte à Merveilles" est un ROMAN AUTOBIOGRAPHIQUE écrit par AHMED SEFRIOUI (et non un recueil de nouvelles, et n'a jamais été écrit par Mohammed Mrabet ou un autre auteur).
+2. "Antigone" est une TRAGÉDIE MODERNE écrite par JEAN ANOUILH (et non par Sophocle dans le cadre de ce programme d'étude marocain, même si c'est une réécriture).
+3. "Le Dernier Jour d'un Condamné" est un ROMAN À THÈSE écrit par VICTOR HUGO.
+Ne confonds jamais les auteurs, les genres littéraires originaux, ni les personnages de ces trois œuvres.
+
+Tu dois répondre STRICTEMENT par un objet JSON valide et bien formé sans aucun texte d'accompagnement ou balisage markdown.
+Le schéma JSON attendu est :
+{
+  "questions": [
+    {
+      "textParts": ["Texte avant l'expression à trouver ", " texte après."],
+      "options": ["Bonne réponse", "Option piégeuse 1", "Option piégeuse 2", "Option piégeuse 3"],
+      "correct": 0,
+      "explanation": "Une explication grammaticale ou littéraire très détaillée et rigoureuse pour ne plus refaire la faute."
+    }
+  ]
+}
+
+RÈGLES CRUCIALES DE SÉCURITÉ ET DE PROPRETÉ DES OPTIONS :
+1. "textParts" doit absolument contenir exactement DEUX éléments (le début de la phrase, et la fin de la phrase). La réponse correcte comblera le vide entre les deux lors du rendu.
+2. "correct" doit être 0 (l'application mélangera les réponses automatiquement). L'option d'index 0 dans le tableau "options" doit donc TOUJOURS être la bonne réponse.
+3. Les options de distraction (index 1, 2, 3) doivent être extrêmement proches de la bonne réponse pour tester l'orthographe ou les accords à la lettre près.
+4. INTERDICTION ABSOLUE de numéroter les options ou d'y accoler des chiffres à la fin (ex: NE PAS générer d'options comme 'influencés2', 'influencés3', 'dilemme4' ou 'A. choix', 'B. choix'). Les options doivent être des mots ou expressions parfaitement propres. Toutes les options doivent être différentes et uniques.`;
+
+            const userPrompt = `Génère 5 questions exclusives et d'un niveau exigeant pour le module : ${mod.title}.`;
+
+            try {
+                const responseText = await fetchFromGroq(sysPrompt, userPrompt, true);
+                const data = JSON.parse(responseText);
+
+                if (data && data.questions && data.questions.length > 0) {
+                    state.activeQuestions = data.questions.map(q => {
+                        // Supprime les chiffres de numérotation parasites collés à la fin des options
+                        let sanitizedOptions = q.options.map(opt => {
+                            return opt.replace(/([a-zA-ZÀ-ÿ]+)\d+$/, '$1').trim();
+                        });
+
+                        // Élimine les doublons créés par la suppression des chiffres
+                        const uniqueOptions = [];
+                        sanitizedOptions.forEach(opt => {
+                            if (!uniqueOptions.includes(opt) && opt !== "") {
+                                uniqueOptions.push(opt);
+                            }
+                        });
+
+                        // Si le nettoyage a réduit le nombre d'options sous la barre des 4, on comble proprement
+                        const correctOpt = uniqueOptions[0] || q.options[0] || "";
+                        while (uniqueOptions.length < 4 && correctOpt) {
+                            const fallbacks = [
+                                correctOpt + "s",
+                                correctOpt + "e",
+                                correctOpt + "es",
+                                correctOpt.replace(/s$/, "")
+                            ];
+                            const nextFallback = fallbacks.find(f => !uniqueOptions.includes(f) && f !== correctOpt);
+                            if (nextFallback) {
+                                uniqueOptions.push(nextFallback);
+                            } else {
+                                uniqueOptions.push(correctOpt + " " + String.fromCharCode(97 + uniqueOptions.length));
+                            }
+                        }
+
+                        q.options = uniqueOptions.slice(0, 4);
+                        return q;
+                    });
+
+                    state.currentQIndex = 0;
+                    state.score = 0;
+                    state.selectedAnswer = null;
+                    state.isAnswerChecked = false;
+                    state.mistakes = [];
+                    state.view = 'playing';
+
+                    const q = state.activeQuestions[0];
+                    const optionsMap = q.options.map((opt, idx) => ({ text: opt, originalIdx: idx }));
+                    state.currentOptionsShuffled = shuffleArray(optionsMap);
+                } else {
+                    throw new Error("Format de réponse invalide");
+                }
+            } catch (error) {
+                console.error(error);
+                state.iaError = "Erreur IA : " + error.message + ". Chargement du mode classique...";
+                render();
+                setTimeout(() => {
+                    state.iaError = null;
+                    window.startModule(moduleId);
+                }, 3000);
+            }
+            render();
+        };
+
+        window.handleSelect = function (index) {
+            if (state.isAnswerChecked) return;
+            state.selectedAnswer = index;
+            render();
+        };
+
+        window.checkAnswer = function () {
+            if (state.selectedAnswer === null) return;
+            state.isAnswerChecked = true;
+            const q = state.activeQuestions[state.currentQIndex];
+            const chosen = state.currentOptionsShuffled[state.selectedAnswer];
+
+            if (chosen.originalIdx === q.correct) state.score++;
+            else state.mistakes.push({ q: q, wrong: chosen.text });
+            render();
+        };
+
+        window.nextQuestion = function () {
+            if (state.currentQIndex < state.activeQuestions.length - 1) {
+                state.currentQIndex++;
+                state.selectedAnswer = null;
+                state.isAnswerChecked = false;
+                const q = state.activeQuestions[state.currentQIndex];
+                const optionsMap = q.options.map((opt, idx) => ({ text: opt, originalIdx: idx }));
+                state.currentOptionsShuffled = shuffleArray(optionsMap);
+                render();
+            } else {
+                saveStat(state.activeModule, state.score, state.activeQuestions.length);
+                state.view = 'result';
+                render();
+            }
+        };
+
+        // --- PROD ECRITE LOGIC (VIA GROQ) ---
+        window.startProdEcrite = function () {
+            clearInterval(state.prodState.timerInterval);
+            const subjects = [
+                "La solitude est-elle un refuge bénéfique pour l'esprit ou une souffrance à éviter ? (Réf. La Boîte à Merveilles)",
+                "Faut-il préserver les traditions anciennes ou s'en détacher pour embrasser la modernité ? (Réf. La Boîte à Merveilles)",
+                "Pensez-vous que les parents doivent imposer leurs choix à leurs enfants pour leur bien, ou leur laisser une liberté totale ? (Réf. La Boîte / Antigone)",
+                "Est-il juste de désobéir aux lois de la société pour suivre sa propre conscience morale ? (Réf. Antigone)",
+                "La peine de mort est-elle un outil de justice efficace ou une violence cruelle et inutile ? (Réf. Le Dernier Jour d'un Condamné)",
+                "Pour faire face aux difficultés de la vie, vaut-il mieux recourir à la science ou s'en remettre à la superstition ? (Réf. La Boîte à Merveilles)",
+                "Le pardon est-il une marque de faiblesse ou une preuve de grandeur d'âme ? (Réf. Antigone / Le Dernier Jour)"
+            ];
+            state.prodState = {
+                step: 'writing',
+                subject: subjects[Math.floor(Math.random() * subjects.length)],
+                text: '', errors: [], currentErrIdx: 0, attempts: 0, feedback: null, timeLeft: 2700,
+                timerInterval: setInterval(() => {
+                    if (state.prodState.timeLeft > 0 && state.prodState.step === 'writing') {
+                        state.prodState.timeLeft--;
+                        const min = Math.floor(state.prodState.timeLeft / 60).toString().padStart(2, '0');
+                        const sec = (state.prodState.timeLeft % 60).toString().padStart(2, '0');
+                        const timerEl = document.getElementById('prod-timer');
+                        if (timerEl) timerEl.innerText = `${min}:${sec}`;
+                    }
+                }, 1000)
+            };
+            state.view = 'prodEcrite';
+            render();
+        };
+
+        window.changeProdSubject = function () {
+            const subjects = [
+                "La solitude est-elle un refuge bénéfique pour l'esprit ou une souffrance à éviter ? (Réf. La Boîte à Merveilles)",
+                "Faut-il préserver les traditions anciennes ou s'en détacher pour embrasser la modernité ? (Réf. La Boîte à Merveilles)",
+                "Pensez-vous que les parents doivent imposer leurs choix à leurs enfants pour leur bien, ou leur laisser une liberté totale ? (Réf. La Boîte / Antigone)",
+                "Est-il juste de désobéir aux lois de la société pour suivre sa propre conscience morale ? (Réf. Antigone)",
+                "La peine de mort est-elle un outil de justice efficace ou une violence cruelle et inutile ? (Réf. Le Dernier Jour d'un Condamné)",
+                "Pour faire face aux difficultés de la vie, vaut-il mieux recourir à la science ou s'en remettre à la superstition ? (Réf. La Boîte à Merveilles)",
+                "Le pardon est-il une marque de faiblesse ou une preuve de grandeur d'âme ? (Réf. Antigone / Le Dernier Jour)"
+            ];
+            let nextSub = state.prodState.subject;
+            while (nextSub === state.prodState.subject) {
+                nextSub = subjects[Math.floor(Math.random() * subjects.length)];
+            }
+            state.prodState.subject = nextSub;
+            render();
+        };
+
+        window.verifyProdText = async function () {
+            const text = document.getElementById('prod-textarea').value.trim();
+            if (!text) return alert("Tu dois écrire un texte avant de vérifier !");
+            if (!localStorage.getItem('defiZeroFauteGroqKey')) return toggleSettings();
+
+            state.prodState.text = text;
+            state.prodState.step = 'checking';
+            render();
+
+            try {
+                const sysPrompt = `Tu es un correcteur implacable de français pour le baccalauréat. Analyse le texte suivant. Identifie uniquement les vraies fautes d'orthographe, de conjugaison et de grammaire.
+Renvoie un JSON strictement formaté comme ceci :
+{
+  "matches": [
+    { "wrong_word": "mot_fautif", "context": "phrase contenant le mot fautif", "correction": "mot_correct", "message": "Règle grammaticale brève." }
+  ]
+}
+Si aucune faute n'est trouvée, renvoie {"matches": []}.`;
+
+                const responseText = await fetchFromGroq(sysPrompt, text, true);
+                const data = JSON.parse(responseText);
+
+                // Map to internal format for the 3-tries game
+                state.prodState.errors = (data.matches || []).map(m => {
+                    let ctxText = m.context || text;
+                    let offset = ctxText.indexOf(m.wrong_word);
+                    return {
+                        message: m.message,
+                        context: { text: ctxText, offset: offset > -1 ? offset : 0, length: m.wrong_word ? m.wrong_word.length : 0, originalWrongWord: m.wrong_word },
+                        correction: m.correction
+                    };
+                });
+
+                if (state.prodState.errors.length === 0) state.prodState.step = 'summary';
+                else {
+                    state.prodState.step = 'correcting';
+                    state.prodState.currentErrIdx = 0;
+                }
+            } catch (error) {
+                alert("Erreur de correction : " + error.message);
+                state.prodState.step = 'writing';
+            }
+            render();
+        };
+
+        window.checkCorrection = function () {
+            const input = document.getElementById('correction-input').value.trim();
+            if (!input) return;
+
+            const err = state.prodState.errors[state.prodState.currentErrIdx];
+            // Normalize for comparison
+            const isCorrect = input.toLowerCase() === err.correction.toLowerCase();
+
+            if (isCorrect) {
+                state.prodState.feedback = { status: 'correct', msg: 'Excellente correction !' };
+                render();
+                setTimeout(() => advanceCorrection(), 1200);
+            } else {
+                state.prodState.attempts++;
+                if (state.prodState.attempts >= 3) {
+                    state.prodState.feedback = { status: 'failed', msg: `Essais épuisés. La bonne correction était : "${err.correction}"` };
+                    render();
+                    setTimeout(() => advanceCorrection(), 3000);
+                } else {
+                    const remaining = 3 - state.prodState.attempts;
+                    state.prodState.feedback = { status: 'wrong', msg: `Faux ! Il te reste ${remaining} essai(s).` };
+                    render();
+                    setTimeout(() => document.getElementById('correction-input').focus(), 50);
+                }
+            }
+        };
+
+        function advanceCorrection() {
+            state.prodState.currentErrIdx++;
+            state.prodState.attempts = 0;
+            state.prodState.feedback = null;
+            if (state.prodState.currentErrIdx >= state.prodState.errors.length) state.prodState.step = 'summary';
+            render();
+            if (state.prodState.step === 'correcting') setTimeout(() => document.getElementById('correction-input').focus(), 50);
+        }
+
+        // --- STRESS SIMULATOR LOGIC (VIA GROQ) ---
+        window.startStressSimulator = function () {
+            clearInterval(state.stressState.timerInterval);
+            state.stressState = {
+                step: 'intro',
+                subject: impossibleQuestions[Math.floor(Math.random() * impossibleQuestions.length)],
+                text: '', feedbackHtml: '', timeLeft: 300, timerInterval: null
+            };
+            state.view = 'stressSimulator';
+            render();
+        };
+
+        window.beginStressWriting = function () {
+            if (!localStorage.getItem('defiZeroFauteGroqKey')) return toggleSettings();
+            state.stressState.step = 'writing';
+            state.stressState.timerInterval = setInterval(() => {
+                if (state.stressState.timeLeft > 0 && state.stressState.step === 'writing') {
+                    state.stressState.timeLeft--;
+                    const min = Math.floor(state.stressState.timeLeft / 60).toString().padStart(2, '0');
+                    const sec = (state.stressState.timeLeft % 60).toString().padStart(2, '0');
+                    const timerEl = document.getElementById('stress-timer');
+                    if (timerEl) timerEl.innerText = `${min}:${sec}`;
+                    if (state.stressState.timeLeft <= 0) evaluateStressPlan(); // Auto submit
+                }
+            }, 1000);
+            render();
+        };
+
+        window.evaluateStressPlan = async function () {
+            const text = document.getElementById('stress-textarea')?.value.trim() || state.stressState.text;
+            if (!text && state.stressState.timeLeft > 0) return alert("Tu dois écrire un plan !");
+
+            clearInterval(state.stressState.timerInterval);
+            state.stressState.text = text;
+            state.stressState.step = 'evaluating';
+            render();
+
+            try {
+                const sysPrompt = `Tu es un professeur de français correcteur du Bac. L'élève a eu 5 minutes pour écrire le plan détaillé d'une production écrite. 
+Sujet imposé : "${state.stressState.subject}"
+Plan de l'élève : "${text || "[Aucun texte fourni]"}"
+Fais une évaluation critique, courte, structurée avec des balises HTML (<ul>, <li>, <strong>, <span>). Pas de markdown.
+Évalue : 1. La pertinence des axes. 2. La clarté. 3. Le point faible à corriger pour le jour J.`;
+
+                const feedback = await fetchFromGroq(sysPrompt, text, false);
+                state.stressState.feedbackHtml = feedback;
+                state.stressState.step = 'feedback';
+            } catch (err) {
+                state.stressState.feedbackHtml = `<p class="text-rose-400">Erreur : ${err.message}</p>`;
+                state.stressState.step = 'feedback';
+            }
+            render();
+        };
+
+
+        function renderHome() {
+            const hasKey = !!localStorage.getItem('defiZeroFauteGroqKey');
+            let modulesHtml = modulesInfo.map(mod => `
+                <button onclick="selectModule('${mod.id}')" class="relative text-left p-3 rounded-xl border border-${mod.color}-500/20 bg-${mod.color}-500/5 hover:bg-${mod.color}-500/10 transition-all active:scale-95 fade-in">
+                    <div class="flex items-center gap-2">
+                        <div class="p-1.5 bg-slate-900 rounded border border-slate-800 text-${mod.color}-400 shrink-0"><i class="${mod.icon} text-lg"></i></div>
+                        <div>
+                            <h3 class="text-[11px] font-bold text-slate-200">${mod.title}</h3>
+                            <p class="text-[9px] text-slate-400 leading-tight">${mod.desc}</p>
+                        </div>
+                    </div>
+                </button>
+            `).join('');
+
+            return `
+                <div class="p-3 max-w-4xl mx-auto w-full fade-in flex flex-col justify-center min-h-[92vh]">
+                    <div class="flex justify-end mb-2">
+                        <button onclick="toggleSettings()" class="text-[10px] bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-slate-800 transition-colors ${hasKey ? 'text-emerald-400' : 'text-slate-400'}">
+                            <i class="ph-gear"></i> ${hasKey ? 'Groq AI Connecté' : 'Paramètres IA'}
+                        </button>
+                    </div>
+
+                    <div class="text-center mb-6">
+                        <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400 mb-1">
+                            Défi Zéro Faute — Édition Pro
+                        </h1>
+                        <p class="text-[10px] md:text-xs text-slate-400">Objectif Régional : Automatise la langue, sécurise ta rédaction.</p>
+                    </div>
+
+                    <!-- NOUVEAU: Simulateur de Stress -->
+                    <button onclick="startStressSimulator()" class="w-full mb-3 p-3 rounded-xl border border-rose-500/30 bg-gradient-to-r from-rose-950/40 to-slate-900 hover:to-rose-950/20 transition-all flex items-center justify-between group fade-in shadow-lg">
+                        <div class="flex items-center gap-3 text-left">
+                            <div class="p-2 bg-rose-500/20 rounded-lg text-rose-400 shadow-inner">
+                                <i class="ph-flame text-xl animate-pulse-fast"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-xs text-slate-100 flex items-center gap-1.5">Défi : La Question Impossible <span class="text-[8px] bg-rose-600 text-white px-1 rounded uppercase">Nouveau</span></h4>
+                                <p class="text-[9px] text-slate-400 mt-0.5">5 minutes pour rédiger un plan sur un sujet philosophique complexe. Corrigé par l'IA Groq.</p>
+                            </div>
+                        </div>
+                        <i class="ph-caret-right text-sm text-rose-400 group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+
+                    <!-- Atelier Correction IA -->
+                    <button onclick="startProdEcrite()" class="w-full mb-4 p-3 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 to-slate-900 transition-all flex items-center justify-between group fade-in">
+                        <div class="flex items-center gap-3 text-left">
+                            <div class="p-2 bg-emerald-500/20 rounded-lg text-emerald-400 shadow-inner"><i class="ph-robot text-xl"></i></div>
+                            <div>
+                                <h4 class="font-bold text-xs text-slate-100">Atelier Prod Écrite (IA)</h4>
+                                <p class="text-[9px] text-slate-400 mt-0.5">Rédige un texte. L'IA trouve tes fautes, à toi de les corriger en 3 essais.</p>
+                            </div>
+                        </div>
+                        <i class="ph-caret-right text-sm text-emerald-400 group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+
+                    <!-- Le Grand Marathon Zéro Faute -->
+                    <button onclick="startMarathon()" class="w-full mb-4 p-3 rounded-xl border border-violet-500/30 bg-gradient-to-r from-violet-950/40 to-slate-900 hover:to-violet-950/20 transition-all flex items-center justify-between group fade-in shadow-lg">
+                        <div class="flex items-center gap-3 text-left">
+                            <div class="p-2 bg-violet-500/20 rounded-lg text-violet-400 shadow-inner"><i class="ph-shield-check text-xl animate-pulse-fast"></i></div>
+                            <div>
+                                <h4 class="font-bold text-xs text-slate-100 flex items-center gap-1.5">Le Marathon Zéro Faute <span class="text-[8px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Orthographe & Conjugaison Extrême</span></h4>
+                                <p class="text-[9px] text-slate-400 mt-0.5">50 questions d'une difficulté impitoyable. Une seule erreur et tu recommences de zéro. Vise la perfection.</p>
+                            </div>
+                        </div>
+                        <i class="ph-caret-right text-sm text-violet-400 group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+
+                    <div class="mb-2 px-1"><h3 class="text-[10px] font-bold uppercase text-slate-400"><i class="ph-lightning text-yellow-400"></i> Mini-Quiz Rapides :</h3></div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+                        ${modulesHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderModuleSelect() {
+            const mod = modulesInfo.find(m => m.id === state.selectedModuleId);
+            const hasKey = !!localStorage.getItem('defiZeroFauteGroqKey');
+
+            return `
+                <div class="p-4 max-w-xl mx-auto w-full fade-in min-h-[92vh] flex flex-col justify-center">
+                    <button onclick="setView('home')" class="text-slate-400 hover:text-white mb-4 text-[11px] font-semibold w-max"><i class="ph-arrow-left"></i> Retour</button>
+                    
+                    <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl text-center shadow-xl">
+                        <div class="p-3 bg-slate-950 rounded-full border border-slate-800 w-12 h-12 flex items-center justify-center mx-auto mb-4 text-blue-400">
+                            <i class="${mod.icon} text-xl"></i>
+                        </div>
+                        <h2 class="text-lg font-bold text-white mb-1">${mod.title}</h2>
+                        <p class="text-xs text-slate-400 mb-6 leading-relaxed">${mod.desc}</p>
+                        
+                        <div class="grid grid-cols-1 gap-3">
+                            <!-- Mode Classique -->
+                            <button onclick="startModule('${mod.id}')" class="p-3.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-900 text-left transition-all active:scale-95 group">
+                                <h4 class="font-bold text-xs text-slate-100 flex items-center justify-between">Mode Classique (Statique) <i class="ph-caret-right text-slate-500 group-hover:translate-x-1 transition-transform"></i></h4>
+                                <p class="text-[9px] text-slate-400 mt-0.5">Série de questions pré-enregistrées. Rapide et disponible hors-ligne.</p>
+                            </button>
+                            
+                            <!-- Mode IA Groq -->
+                            <button onclick="startModuleIA('${mod.id}')" class="p-3.5 rounded-xl border ${hasKey ? 'border-blue-500/30 bg-blue-950/20 hover:bg-blue-950/45' : 'border-slate-800 bg-slate-950 opacity-50 cursor-not-allowed'} text-left transition-all active:scale-95 group" ${!hasKey ? 'disabled' : ''}>
+                                <h4 class="font-bold text-xs ${hasKey ? 'text-blue-300' : 'text-slate-400'} flex items-center justify-between">Mode IA Groq (Inédit) <i class="ph-sparkle text-blue-400"></i></h4>
+                                <p class="text-[9px] text-slate-400 mt-0.5">L'IA de Groq compose instantanément un quiz sur-mesure sur les œuvres.</p>
+                                ${!hasKey ? '<span class="inline-block mt-2 text-[8px] bg-slate-800 text-rose-400 px-1.5 py-0.5 rounded font-bold"><i class="ph-lock"></i> Clé Groq Requise</span>' : ''}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGeneratingQuiz() {
+            return `
+                <div class="p-4 max-w-xl mx-auto w-full fade-in min-h-[92vh] flex flex-col justify-center text-center">
+                    <i class="ph-cpu text-4xl text-blue-400 animate-pulse mb-3 mx-auto"></i>
+                    <h3 class="text-sm font-bold">L'IA Groq conçoit tes questions...</h3>
+                    <p class="text-[10px] text-slate-400 mt-1 max-w-xs mx-auto">Génération de 5 QCM de haut niveau via llama-3.3-70b-versatile.</p>
+                    ${state.iaError ? `<div class="mt-4 p-3 rounded-lg bg-rose-950/40 border border-rose-900/50 text-[10px] text-rose-400">${state.iaError}</div>` : ''}
+                </div>
+            `;
+        }
+
+        function renderPlaying() {
+            const q = state.activeQuestions[state.currentQIndex];
+            const modData = modulesInfo.find(m => m.id === state.activeModule);
+            const progress = ((state.currentQIndex) / state.activeQuestions.length) * 100;
+
+            let optionsHtml = state.currentOptionsShuffled.map((opt, idx) => {
+                let btnClass = "bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800";
+                let icon = '';
+                if (state.isAnswerChecked) {
+                    if (opt.originalIdx === q.correct) { btnClass = "bg-emerald-950/60 border-emerald-500 text-emerald-300"; icon = '<i class="ph-check-circle text-lg text-emerald-400"></i>'; }
+                    else if (idx === state.selectedAnswer) { btnClass = "bg-rose-950/60 border-rose-500 text-rose-300"; icon = '<i class="ph-x-circle text-lg text-rose-400"></i>'; }
+                    else { btnClass = "bg-slate-900 border-slate-800 text-slate-500 opacity-40"; }
+                } else if (state.selectedAnswer === idx) {
+                    btnClass = "bg-blue-900/40 border-blue-500 text-blue-300";
+                }
+                return `<button onclick="handleSelect(${idx})" ${state.isAnswerChecked ? 'disabled' : ''} class="flex items-center justify-between p-3 rounded-xl border transition-all text-xs font-medium text-left ${btnClass}"><span class="flex items-center gap-2"><span class="text-slate-500 font-mono text-[9px] bg-slate-950 px-1 py-0.5 rounded">${idx + 1}</span> ${opt.text}</span>${icon}</button>`;
+            }).join('');
+
+            return `
+                <div class="p-3 max-w-xl mx-auto w-full fade-in min-h-[92vh] flex flex-col justify-center">
+                    <div class="flex justify-between mb-3">
+                        <button onclick="setView('home')" class="text-slate-400 hover:text-white text-[11px] font-semibold"><i class="ph-arrow-left"></i> Quitter</button>
+                        <span class="text-[10px] font-bold text-slate-500 uppercase">Q. ${state.currentQIndex + 1}/${state.activeQuestions.length}</span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-1.5 rounded-full mb-5 border border-slate-800"><div class="bg-blue-500 h-full transition-all" style="width: ${progress}%"></div></div>
+                    
+                    <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800 mb-5">
+                        <p class="text-sm font-medium mb-5 text-slate-100 leading-relaxed">${q.textParts[0]} <span class="inline-block border-b-2 mx-1 font-bold px-2 py-0.5 rounded ${!state.isAnswerChecked ? 'border-slate-500 text-blue-400 bg-slate-950' : (state.currentOptionsShuffled[state.selectedAnswer]?.originalIdx === q.correct ? 'border-emerald-500 text-emerald-400 bg-emerald-950' : 'border-rose-500 text-rose-400 bg-rose-950')}">${state.selectedAnswer !== null ? state.currentOptionsShuffled[state.selectedAnswer].text : '......'}</span> ${q.textParts[1]}</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${optionsHtml}</div>
+                        ${state.isAnswerChecked ? `<div class="mt-4 p-3 rounded-xl border ${state.currentOptionsShuffled[state.selectedAnswer].originalIdx === q.correct ? 'bg-emerald-900/10 border-emerald-900/50 text-emerald-200' : 'bg-rose-900/10 border-rose-900/50 text-rose-200'} fade-in text-[11px] leading-relaxed">${q.explanation}</div>` : ''}
+                    </div>
+                    <div class="flex justify-end">
+                        ${!state.isAnswerChecked
+                    ? `<button onclick="checkAnswer()" ${state.selectedAnswer === null ? 'disabled' : ''} class="px-5 py-2 rounded-xl font-bold text-xs bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 transition-all">Valider <kbd class="hidden md:inline-block ml-1 font-mono text-[9px] bg-blue-700 px-1 rounded">Entrée</kbd></button>`
+                    : `<button onclick="nextQuestion()" class="px-5 py-2 rounded-xl font-bold text-xs bg-white text-slate-900 hover:bg-slate-200 transition-all">Suivant <i class="ph-caret-right"></i></button>`}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderResult() {
+            return `
+                <div class="p-3 max-w-xl mx-auto w-full fade-in text-center flex flex-col justify-center min-h-[92vh]">
+                    <h2 class="text-4xl font-black mb-1">${state.score} / ${state.activeQuestions.length}</h2>
+                    <div class="flex gap-3 justify-center mb-6 mt-4">
+                        <button onclick="startModule('${state.activeModule}')" class="bg-slate-800 hover:bg-slate-700 text-white py-2 px-5 rounded-lg text-xs font-bold border border-slate-700"><i class="ph-arrow-counter-clockwise"></i> Rejouer</button>
+                        <button onclick="setView('home')" class="bg-blue-600 hover:bg-blue-500 text-white py-2 px-5 rounded-lg text-xs font-bold"><i class="ph-house"></i> Accueil</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderProdEcrite() {
+            const { step, text, errors, currentErrIdx, attempts, feedback, subject } = state.prodState;
+            let content = '';
+
+            if (step === 'writing') {
+                const min = Math.floor(state.prodState.timeLeft / 60).toString().padStart(2, '0');
+                const sec = (state.prodState.timeLeft % 60).toString().padStart(2, '0');
+                content = `
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex-grow flex flex-col relative">
+                        <div class="absolute top-3 right-3 flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded text-slate-300 border border-slate-800"><i class="ph-timer text-rose-400"></i><span id="prod-timer" class="font-mono text-xs">${min}:${sec}</span></div>
+                        <p class="text-[10px] text-slate-400 mb-2">Rédige un paragraphe argumenté sur le sujet ci-dessous. L'IA Groq va repérer tes erreurs.</p>
+                        
+                        <div class="bg-slate-950 border border-slate-850 rounded-lg p-3 mb-3 relative flex items-center justify-between gap-4">
+                            <div>
+                                <span class="text-[8px] font-bold text-emerald-400 uppercase tracking-wider block mb-0.5">Sujet Imposé :</span>
+                                <p class="text-[11px] font-medium text-slate-200 leading-normal font-serif italic">${subject}</p>
+                            </div>
+                            <button onclick="changeProdSubject()" class="text-slate-500 hover:text-emerald-400 transition-colors p-1.5 bg-slate-900 border border-slate-850 rounded-md" title="Changer de sujet">
+                                <i class="ph-arrows-clockwise text-sm"></i>
+                            </button>
+                        </div>
+
+                        <textarea id="prod-textarea" class="w-full flex-grow bg-slate-950 border border-slate-700 rounded-lg p-3 text-[11px] text-white focus:outline-none focus:border-emerald-500 resize-none min-h-[200px]" placeholder="Il paraît que..."></textarea>
+                        <div class="mt-3 flex justify-end"><button onclick="verifyProdText()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-[11px] font-bold"><i class="ph-magnifying-glass"></i> Scanner avec Groq AI</button></div>
+                    </div>
+                `;
+            } else if (step === 'checking') {
+                content = `<div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center flex-grow flex flex-col justify-center"><i class="ph-robot text-4xl text-emerald-500 animate-pulse mb-3 mx-auto"></i><h3 class="text-sm font-bold">Analyse Groq en cours...</h3></div>`;
+            } else if (step === 'correcting') {
+                const err = errors[currentErrIdx];
+                content = `
+                    <div class="bg-slate-900 border border-emerald-500/30 rounded-xl p-4 flex flex-col">
+                        <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2"><h3 class="text-xs font-bold text-emerald-400">Atelier Correction</h3><span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded">Faute ${currentErrIdx + 1}/${errors.length}</span></div>
+                        <div class="mb-4 text-[11px] text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800 leading-relaxed">
+                            Contexte : "... <span class="text-rose-400 font-bold bg-rose-500/10 px-1 py-0.5 rounded border border-rose-500/20">${err.context.originalWrongWord || '[erreur ciblée]'}</span> ..."
+                            <div class="text-[9px] text-blue-300 mt-2 italic"><i class="ph-info"></i> Indice IA : ${err.message}</div>
+                        </div>
+                        <div class="bg-slate-800/30 p-3 rounded-lg border border-slate-700">
+                            <label class="text-[10px] font-bold block mb-1">Corrige le mot (Essai ${attempts + 1}/3) :</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="correction-input" onkeypress="if(event.key === 'Enter') checkCorrection()" class="flex-grow bg-slate-950 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500" placeholder="Tape ta correction..." autocomplete="off">
+                                <button onclick="checkCorrection()" class="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold">Valider</button>
+                            </div>
+                            ${feedback ? `<div class="mt-2 text-[10px] font-bold ${feedback.status === 'correct' ? 'text-emerald-400' : 'text-rose-400'}">${feedback.msg}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            } else if (step === 'summary') {
+                content = `<div class="bg-slate-900 rounded-xl p-5 text-center flex-grow flex flex-col justify-center"><i class="ph-check-fat text-3xl text-emerald-400 mb-2"></i><h2 class="text-lg font-bold">Terminé !</h2><p class="text-xs text-slate-400">Toutes les fautes ont été corrigées.</p></div>`;
+            }
+
+            return `<div class="p-3 max-w-2xl mx-auto w-full fade-in flex flex-col min-h-[92vh]"><button onclick="setView('home')" class="text-slate-400 hover:text-white mb-2 text-[11px] font-semibold w-max"><i class="ph-arrow-left"></i> Retour</button>${content}</div>`;
+        }
+
+        function renderStressSimulator() {
+            const { step, subject, feedbackHtml, timeLeft } = state.stressState;
+            let content = '';
+
+            if (step === 'intro') {
+                content = `
+                    <div class="bg-slate-900 border border-rose-500/30 p-6 rounded-xl text-center">
+                        <i class="ph-flame text-4xl text-rose-500 mb-3 animate-pulse-fast"></i>
+                        <h2 class="text-lg font-bold text-white mb-2">La Question Impossible</h2>
+                        <p class="text-xs text-slate-300 mb-6 leading-relaxed">Tu as très exactement <strong>5 minutes</strong> pour concevoir et rédiger un plan détaillé (Introduction, Axes, Conclusion) sur un sujet philosophique complexe. Une fois le temps écoulé, Groq t'évaluera sans pitié.</p>
+                        <button onclick="beginStressWriting()" class="bg-rose-600 hover:bg-rose-500 text-white px-6 py-2.5 rounded-lg text-xs font-bold w-full shadow-lg shadow-rose-900/50">Démarrer le Chrono</button>
+                    </div>
+                `;
+            } else if (step === 'writing') {
+                const min = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                const sec = (timeLeft % 60).toString().padStart(2, '0');
+                content = `
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex-grow flex flex-col">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Sujet Imposé :</h3>
+                            <div class="font-mono text-xl font-bold text-white bg-rose-950/50 px-3 py-1 rounded border border-rose-900" id="stress-timer">${min}:${sec}</div>
+                        </div>
+                        <p class="text-[11px] text-slate-200 bg-slate-950 p-3 rounded-lg border border-slate-800 font-serif italic mb-3">${subject}</p>
+                        <textarea id="stress-textarea" class="w-full flex-grow bg-slate-950 border border-slate-700 rounded-lg p-3 text-[11px] text-white focus:outline-none focus:border-rose-500 resize-none min-h-[200px]" placeholder="I. Introduction (Amorce, Thèse...)\nII. Développement...\nIII. Conclusion..."></textarea>
+                        <button onclick="evaluateStressPlan()" class="mt-3 bg-white text-rose-900 px-4 py-2 rounded-lg text-[11px] font-bold hover:bg-slate-200">Soumettre le plan en avance</button>
+                    </div>
+                `;
+            } else if (step === 'evaluating') {
+                content = `<div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center flex-grow flex flex-col justify-center"><i class="ph-cpu text-4xl text-rose-500 animate-pulse mb-3 mx-auto"></i><h3 class="text-sm font-bold">L'examinateur IA délibère...</h3></div>`;
+            } else if (step === 'feedback') {
+                content = `
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex-grow flex flex-col">
+                        <h3 class="text-xs font-bold text-rose-400 mb-3 border-b border-slate-800 pb-2"><i class="ph-clipboard-text"></i> Rapport de l'examinateur :</h3>
+                        <div class="text-[11px] text-slate-300 leading-relaxed space-y-2 overflow-y-auto custom-scrollbar flex-grow pr-2">${feedbackHtml}</div>
+                    </div>
+                `;
+            }
+
+            return `<div class="p-3 max-w-2xl mx-auto w-full fade-in flex flex-col min-h-[92vh]"><button onclick="setView('home')" class="text-slate-400 hover:text-white mb-2 text-[11px] font-semibold w-max"><i class="ph-arrow-left"></i> Fuir l'épreuve</button>${content}</div>`;
+        }
+
+        function renderMarathon() {
+            const { questions, currentIndex, currentStreak, maxStreak, selectedAnswer, isAnswerChecked, currentOptionsShuffled } = state.marathonState;
+            const goal = 35;
+
+            if (currentStreak >= goal) {
+                return `
+                    <div class="p-4 max-w-xl mx-auto w-full fade-in text-center flex flex-col justify-center min-h-[92vh]">
+                        <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl mb-6 max-w-sm mx-auto">
+                            <i class="ph-crown text-5xl text-amber-400 animate-bounce mb-3 block"></i>
+                            <h2 class="text-xl font-extrabold text-white">Marathon Réussi !</h2>
+                            <p class="text-xs text-slate-400 mt-2">Félicitations ! Tu as enchaîné ${goal} réponses correctes d'affilée sans commettre la moindre erreur. Tu es fin prêt pour l'examen de français !</p>
+                        </div>
+                        <div class="flex gap-3 justify-center">
+                            <button onclick="startMarathon()" class="bg-violet-600 hover:bg-violet-500 text-white py-2.5 px-6 rounded-xl text-xs font-bold transition-all"><i class="ph-arrow-counter-clockwise"></i> Recommencer</button>
+                            <button onclick="setView('home')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2.5 px-6 rounded-xl text-xs font-bold border border-slate-700 transition-all"><i class="ph-house"></i> Accueil</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const q = questions[currentIndex];
+            const progress = (currentStreak / goal) * 100;
+
+            let optionsHtml = currentOptionsShuffled.map((opt, idx) => {
+                let btnClass = "bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800";
+                let icon = '';
+                if (isAnswerChecked) {
+                    if (opt.originalIdx === q.correct) {
+                        btnClass = "bg-emerald-950/60 border-emerald-500 text-emerald-300";
+                        icon = '<i class="ph-check-circle text-lg text-emerald-400"></i>';
+                    } else if (idx === selectedAnswer) {
+                        btnClass = "bg-rose-950/60 border-rose-500 text-rose-300";
+                        icon = '<i class="ph-x-circle text-lg text-rose-400"></i>';
+                    } else {
+                        btnClass = "bg-slate-900 border-slate-800 text-slate-500 opacity-40";
+                    }
+                } else if (selectedAnswer === idx) {
+                    btnClass = "bg-violet-900/40 border-violet-500 text-violet-300";
+                }
+                return `<button onclick="handleMarathonSelect(${idx})" ${isAnswerChecked ? 'disabled' : ''} class="flex items-center justify-between p-3 rounded-xl border transition-all text-xs font-medium text-left ${btnClass}"><span class="flex items-center gap-2"><span class="text-slate-500 font-mono text-[9px] bg-slate-950 px-1 py-0.5 rounded">${idx + 1}</span> ${opt.text}</span>${icon}</button>`;
+            }).join('');
+
+            return `
+                <div class="p-3 max-w-xl mx-auto w-full fade-in min-h-[92vh] flex flex-col justify-center">
+                    <div class="flex justify-between items-center mb-3">
+                        <button onclick="setView('home')" class="text-slate-400 hover:text-white text-[11px] font-semibold"><i class="ph-arrow-left"></i> Quitter le Marathon</button>
+                        <div class="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
+                            <span class="flex items-center gap-1 text-[10px] font-bold text-amber-400"><i class="ph-fire text-xs"></i> Streak : ${currentStreak} / ${goal}</span>
+                            <span class="text-slate-600">|</span>
+                            <span class="text-[9px] text-slate-400 font-medium">Record : ${maxStreak}</span>
+                        </div>
+                    </div>
+
+                    <div class="w-full bg-slate-900 h-1.5 rounded-full mb-5 border border-slate-800"><div class="bg-violet-500 h-full transition-all" style="width: ${progress}%"></div></div>
+
+                    <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800 mb-5 relative overflow-hidden shadow-2xl">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+                        <p class="text-sm font-medium mb-5 text-slate-100 leading-relaxed">${q.textParts[0]} <span class="inline-block border-b-2 mx-1 font-bold px-2 py-0.5 rounded ${selectedAnswer === null ? 'border-slate-500 text-violet-400 bg-slate-950' : (isAnswerChecked && currentOptionsShuffled[selectedAnswer]?.originalIdx === q.correct ? 'border-emerald-500 text-emerald-400 bg-emerald-950' : (isAnswerChecked ? 'border-rose-500 text-rose-400 bg-rose-950' : 'border-violet-500 text-violet-300 bg-violet-950'))}">${selectedAnswer !== null ? currentOptionsShuffled[selectedAnswer].text : '......'}</span> ${q.textParts[1]}</p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${optionsHtml}</div>
+
+                        ${isAnswerChecked ? `
+                            <div class="mt-4 p-3 rounded-xl border ${currentOptionsShuffled[selectedAnswer].originalIdx === q.correct ? 'bg-emerald-900/10 border-emerald-900/50 text-emerald-200' : 'bg-rose-900/10 border-rose-900/50 text-rose-200'} fade-in text-[11px] leading-relaxed">
+                                <div class="font-bold flex items-center gap-1.5 mb-1">
+                                    <i class="${currentOptionsShuffled[selectedAnswer].originalIdx === q.correct ? 'ph-sparkle text-emerald-400' : 'ph-x text-rose-400'}"></i>
+                                    ${currentOptionsShuffled[selectedAnswer].originalIdx === q.correct ? 'Correct ! Ton streak augmente.' : 'Erreur ! Le marathon prend fin.'}
+                                </div>
+                                <div>${q.explanation}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="flex justify-end">
+                        ${!isAnswerChecked
+                            ? `<button onclick="checkMarathonAnswer()" ${selectedAnswer === null ? 'disabled' : ''} class="px-5 py-2.5 rounded-xl font-bold text-xs bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50 transition-all shadow-lg shadow-violet-950/40">Valider la réponse</button>`
+                            : `<button onclick="nextMarathonQuestion()" class="px-5 py-2.5 rounded-xl font-bold text-xs ${currentOptionsShuffled[selectedAnswer].originalIdx === q.correct ? 'bg-white text-slate-900 hover:bg-slate-200' : 'bg-rose-600 hover:bg-rose-500 text-white'} transition-all shadow-md">${currentOptionsShuffled[selectedAnswer].originalIdx === q.correct ? 'Question suivante <i class="ph-caret-right"></i>' : 'Recommencer le Défi'}</button>`
+                        }
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            switch (state.view) {
+                case 'home': app.innerHTML = renderHome(); break;
+                case 'playing': app.innerHTML = renderPlaying(); break;
+                case 'result': app.innerHTML = renderResult(); break;
+                case 'prodEcrite': app.innerHTML = renderProdEcrite(); break;
+                case 'stressSimulator': app.innerHTML = renderStressSimulator(); break;
+                case 'moduleSelect': app.innerHTML = renderModuleSelect(); break;
+                case 'generatingQuiz': app.innerHTML = renderGeneratingQuiz(); break;
+                case 'marathon': app.innerHTML = renderMarathon(); break;
+            }
+            if (state.view === 'prodEcrite' && state.prodState.step === 'correcting' && !state.prodState.feedback) {
+                const input = document.getElementById('correction-input');
+                if (input) input.focus();
+            }
+        }
+
+        window.onload = function () { render(); };
+
+        window.addEventListener('keydown', function (e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (state.view === 'playing') {
+                if (['1', '2', '3', '4'].includes(e.key) && !state.isAnswerChecked) {
+                    const idx = parseInt(e.key) - 1;
+                    if (idx < state.currentOptionsShuffled.length) handleSelect(idx);
+                }
+                if (e.key === 'Enter') {
+                    if (!state.isAnswerChecked && state.selectedAnswer !== null) checkAnswer();
+                    else if (state.isAnswerChecked) nextQuestion();
+                }
+            } else if (state.view === 'marathon') {
+                const mState = state.marathonState;
+                if (['1', '2', '3', '4'].includes(e.key) && !mState.isAnswerChecked) {
+                    const idx = parseInt(e.key) - 1;
+                    if (idx < mState.currentOptionsShuffled.length) handleMarathonSelect(idx);
+                }
+                if (e.key === 'Enter') {
+                    if (!mState.isAnswerChecked && mState.selectedAnswer !== null) checkMarathonAnswer();
+                    else if (mState.isAnswerChecked) nextMarathonQuestion();
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

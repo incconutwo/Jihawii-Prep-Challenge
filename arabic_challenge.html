@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحدي اللغة العربية — الأولى باكالوريا (الامتحان الجهوي)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;950&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        body { font-family: 'Tajawal', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .fade-in { animation: fadeIn 0.15s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(2px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+        .animate-pulse-fast { animation: pulse-fast 1s infinite; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-emerald-500/30">
+    
+    <div id="app" class="flex-grow w-full flex flex-col justify-center"></div>
+
+    <!-- Modal Paramètres API -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4 fade-in">
+        <div class="bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl max-w-sm w-full">
+            <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2"><i class="ph-cpu text-emerald-400"></i> إعدادات الذكاء الاصطناعي (Groq)</h2>
+            <p class="text-[10px] text-slate-400 mb-4 leading-relaxed">
+                يستخدم مصحح الإنشاء ومحاكي الضغط النفسي نموذج <strong>llama-3.3-70b-versatile</strong> عبر مفتاح API الخاص بك من موقع Groq (مجاني على console.groq.com). يتم حفظ المفتاح محلياً في متصفحك فقط لتفعيل الميزات الإضافية.
+            </p>
+            <input type="password" id="groq-api-key" placeholder="gsk_..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 mb-4 font-mono text-left" dir="ltr">
+            <div class="flex justify-start gap-2">
+                <button onclick="toggleSettings()" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white transition-colors">إلغاء</button>
+                <button onclick="saveGroqKey()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg active:scale-95 transition-all">حفظ المفتاح</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GROQ_MODEL = "llama-3.3-70b-versatile";
+
+        const questionDatabase = {
+            langue_grammar: [
+                { textParts: ["قرأتُ في المكتبةِ ", " كتبٍ علميةٍ."], options: ["ثلاثةَ", "ثلاثَ", "ثلاثُ", "ثلاثةُ"], correct: 0, explanation: "القاعدة: الأعداد من 3 إلى 9 تخالف المعدود في التذكير والتأنيث. بما أن 'كتب' مفردها 'كتاب' (مذكر)، فإن العدد يجب أن يكون مؤنثاً بالتاء المربوطة وبما أنه مفعول به منصوب فهو 'ثلاثةَ'." },
+                { textParts: ["اشترى أبي من السوقِ صاعاً ", "."], options: ["قمحاً", "قمحٌ", "قمحٍ", "القمحُ"], correct: 0, explanation: "القاعدة: الكلمة الواقعة بعد أسماء الكيل والمقاييس والوزن تعرب تمييزاً ملفوظاً منصوباً بالفتحة الظاهرة." },
+                { textParts: ["ازدادَ التلميذُ ", " بمطالعة الكتب."], options: ["أدباً", "أدبٌ", "أدبٍ", "الأدبُ"], correct: 0, explanation: "القاعدة: الاسم النكرة المنصوب بعد الأفعال الدالة على الزيادة أو الامتلاء (مثل ازداد، ملأ) يعرب تمييزاً ملحوظاً منصوباً." },
+                { textParts: ["في المؤسسةِ ", " تلميذاً."], options: ["خمسةَ عشرَ", "خمسَ عشرةَ", "خمسةُ عشرُ", "خمسَ عشرَ"], correct: 0, explanation: "القاعدة: الأعداد المركبة (15) الجزء الأول يخالف المعدود (تلميذاً - مذكر) فيكون مؤنثاً 'خمسة'، والجزء الثاني يطابق فيكون 'عشرَ'، والعدد مبني على فتح الجزأين." },
+                { textParts: ["حضرَ المسابقةَ ", " طالبةً."], options: ["إحدى وعشرون", "واحد وعشرون", "إحدى وعشرين", "أحد وعشرون"], correct: 0, explanation: "القاعدة: المعطوف عليه 'إحدى' يطابق المعدود المؤنث 'طالبة'، وحرف العطف متبوع بلفظ العقود 'عشرون' لأنه فاعل مرفوع بالواو." }
+            ],
+            langue_morphology: [
+                { textParts: ["النسبةُ إلى كلمة 'صناعة' هي: جهود ", "."], options: ["صناعيّة", "صناعتيّة", "صنعيّة", "صنيعيّة"], correct: 0, explanation: "القاعدة: عند النسبة إلى اسم على وزن 'فَعالَة'، تُحذف تاؤه المربوطة وتضاف ياء النسبة المشددة مع كسر ما قبلها." },
+                { textParts: ["النسبةُ إلى الاسم المقصور 'مستشفى' هي: علاج ", "."], options: ["مستشفيّ", "مستشفويّ", "مستشفائيّ", "مستشفاتيّ"], correct: 0, explanation: "القاعدة: إذا كانت ألف المقصور رابعة فما فوق (وهنا سادسة)، فإن الألف تُحذف وجوباً عند النسبة." },
+                { textParts: ["النسبةُ إلى الاسم الممدود 'خضراء' هي: لون ", "."], options: ["خضراويّ", "خضرائيّ", "خضريّ", "خضرويّ"], correct: 0, explanation: "القاعدة: إذا كانت همزة الممدود للتأنيث (مثل خضراء)، تُقلب واواً وجوباً عند النسبة فتصبح 'خضراويّ'." },
+                { textParts: ["مصدرُ الفعل الخماسي 'تَقدَّمَ' هو: ", "."], options: ["تَقَدُّم", "تَقْدِيم", "تَقادُم", "إقْدام"], correct: 0, explanation: "القاعدة: مصدر الفعل الخماسي المبدوء بتاء زائدة يأتي على وزن ماضيه مع ضم ما قبل الآخر (تقدَّمَ -> تقدُّم)." },
+                { textParts: ["مصدرُ الفعل الرباعي 'ناقَشَ' هو: ", "."], options: ["مُناقَشة ونِقاش", "نِقاش فقط", "مُناقَشة فقط", "تناقُش"], correct: 0, explanation: "القاعدة: الفعل على وزن 'فاعَلَ' يأتي مصدره على وزنين قياسيين هما 'مُفاعَلَة' و'فِعال' (مناقشة ونِقاش)." }
+            ],
+            rhetorical_methods: [
+                { textParts: ["الأسلوبُ في قوله تعالى: 'رَبِّ لَا تَذَرْنِي فَرْدًا' هو نهيٌ خرجَ إلى معنى: ", "."], options: ["الدعاء", "التمني", "الالتماس", "النصح"], correct: 0, explanation: "القاعدة: عندما يكون النهي أو الأمر موجهاً من العبد إلى ربه الخالق، فإنه يخرج من معناه الحقيقي ليؤدي وظيفة 'الدعاء'." },
+                { textParts: ["الاستفهامُ في قوله تعالى: 'أَلَيْسَ اللَّهُ بِأَحْكَمِ الْحَاكِمِينَ' يفيد: ", "."], options: ["التقرير", "الإنكار", "التعجب", "النفي"], correct: 0, explanation: "القاعدة: الاستفهام المنفي (أليس، ألم) يفيد التقرير والتوكيد، حيث يُراد به حمل المخاطب على الإقرار والاعتراف." },
+                { textParts: ["الأسلوبُ في جملة 'يا ليتَ الشبابَ يعودُ يوماً' يعبر عن: ", "."], options: ["التمني", "الرجاء", "النداء الحقيقي", "الاستفهام"], correct: 0, explanation: "القاعدة: التمني هو طلب أمر محبوب لا يُرجى حصوله إما لكونه مستحيلاً (كعودة الشباب) أو عسيراً، والأداة الأصلية له هي 'ليت'." },
+                { textParts: ["قول الأب لابنه المقصر: 'اسْتَمِرَّ في إهمالِكَ!' هو أمرٌ يفيد: ", "."], options: ["التهديد", "النصح والإرشاد", "التعجيز", "التخيير"], correct: 0, explanation: "القاعدة: يخرج الأمر عن معناه الحقيقي للتهديد إذا كان يهدف إلى تخويف المخاطب من عاقبة الاستمرار في فعله القبيح." }
+            ],
+            themes_texts: [
+                { textParts: ["القضية التي تعالج التغيرات البنيوية العميقة التي تطور الاقتصاد والتعليم هي قضية ", "."], options: ["التنمية", "التكنولوجيا", "الهجرة", "العولمة"], correct: 0, explanation: "قضية التنمية هي القضية المحورية التي تهدف إلى تطوير الكفاءات البشرية والمؤشرات الاقتصادية والاجتماعية." },
+                { textParts: ["المفهوم الذي يعبر عن صراع الهوية والتبادل الثقافي نتيجة انتقال الأفراد بين الدول هو ", "."], options: ["الهجرة", "التواصل", "الإبداع", "التحديث"], correct: 0, explanation: "الهجرة تطرح أسئلة الهوية، الاندماج، وصراع الثقافات بين الوطن الأصلي والبلد المضيف." },
+                { textParts: ["من القيم الإنسانية التي يجب ترسيخها لمواجهة التعصب ونبذ الآخر قيمة ", "."], options: ["التسامح", "التنمية", "الحداثة", "التضامن"], correct: 0, explanation: "التسامح هو القيمة الأخلاقية الكبرى التي تدعو إلى قبول الاختلاف والتعايش السلمي مع الآخر." }
+            ],
+            expression_skills: [
+                { textParts: ["الخطوة الأولى والأساسية في مهارة 'توسيع فكرة' هي: ", "."], options: ["قراءة القولة وتحديد أفكارها الجزئية", "صياغة الخاتمة التركيبية", "كتابة الحجج والأمثلة", "مقارنة القولة بآراء معارضة"], correct: 0, explanation: "لا يمكن التوسيع في أي فكرة دون فهم دلالاتها أولاً عبر القراءة المتأنية وتفكيك القولة إلى عناصرها الأساسية." },
+                { textParts: ["الروابط مثل 'بالمقابل، غير أن، بيد أن' تستخدم في الكتابة للتعبير عن ", "."], options: ["التعارض والاستدراك", "التفسير والتوضيح", "الاستنتاج والتركيب", "السببية والتعليل"], correct: 0, explanation: "هذه الروابط المنطقية تستخدم لتنظيم مسار الحجاج والمقابلة بين فكرتين متعارضتين." }
+            ]
+        };
+
+        const impossibleQuestions = [
+            "هل يمكن للحداثة الرقمية أن تقضي تماماً على الخصوصية الثقافية للمجتمعات النامية؟ (اكتب خطة تفصيلية حجاجية)",
+            "أيهما أكثر فاعلية في قيام التنمية المستدامة: الاستثمار في العنصر البشري أم التركيز على البنية التحتية التكنولوجية؟",
+            "كيف تساهم قيم التضامن الإنساني في معالجة الآثار السلبية لظاهرة الهجرة السرية دون المساس بسيادة الدول؟",
+            "يرى البعض أن غزارة تدفق المعلومات الرقمية قد أدت إلى تراجع منسوب الإبداع والعمق الفكري لدى الشباب المعاصر. ناقش هذه الفكرة."
+        ];
+
+        const modulesInfo = [
+            { id: 'langue_grammar', title: 'علوم اللغة: التمييز والعدد', desc: 'تجنب أخطاء الإعراب والتركيب في الأعداد.', icon: 'ph-list-numbers', color: 'rose' },
+            { id: 'langue_morphology', title: 'علوم اللغة: النسبة والمصادر', desc: 'اضبط الصياغة الصرفية للكلمات.', icon: 'ph-article', color: 'blue' },
+            { id: 'rhetorical_methods', title: 'الأساليب والظواهر البلاغية', desc: 'ميز بين الأمر، النهي، الاستفهام والتمني.', icon: 'ph-chat-teardrop-text', color: 'emerald' },
+            { id: 'themes_texts', title: 'قضايا ومفاهيم النصوص', desc: 'استوعب دلالات التنمية، التكنولوجيا والقيم.', icon: 'ph-books', color: 'purple' },
+            { id: 'expression_skills', title: 'مهارات التعبير والإنشاء', desc: 'قواعد الربط وتوسيع فكرة وتنظيم الحجاج.', icon: 'ph-pencil-line', color: 'orange' }
+        ];
+
+        let state = {
+            view: 'home',
+            activeModule: null, activeQuestions: [], currentQIndex: 0, score: 0,
+            selectedAnswer: null, currentOptionsShuffled: [], isAnswerChecked: false, mistakes: [],
+            selectedModuleId: null, iaError: null,
+            prodState: { step: 'writing', subject: '', text: '', errors: [], currentErrIdx: 0, attempts: 0, feedback: null, timeLeft: 2700, timerInterval: null },
+            stressState: { step: 'intro', subject: '', text: '', feedbackHtml: '', timeLeft: 300, timerInterval: null }
+        };
+
+        const loadStats = () => JSON.parse(localStorage.getItem('defiArabicStats')) || {};
+        const saveStat = (moduleId, score, total) => {
+            const stats = loadStats();
+            if (!stats[moduleId] || score > stats[moduleId].score) {
+                stats[moduleId] = { score, total };
+                localStorage.setItem('defiArabicStats', JSON.stringify(stats));
+            }
+        };
+
+        function shuffleArray(array) {
+            let shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        function toggleSettings() {
+            const modal = document.getElementById('settings-modal');
+            if (modal.classList.contains('hidden')) {
+                document.getElementById('groq-api-key').value = localStorage.getItem('defiArabicGroqKey') || '';
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+
+        function saveGroqKey() {
+            const key = document.getElementById('groq-api-key').value.trim();
+            if(key) localStorage.setItem('defiArabicGroqKey', key);
+            else localStorage.removeItem('defiArabicGroqKey');
+            toggleSettings();
+            render();
+        }
+
+        async function fetchFromGroq(sysPrompt, userPrompt, jsonMode = false) {
+            const key = localStorage.getItem('defiArabicGroqKey');
+            if (!key) throw new Error("مفتاح API الخاص بـ Groq مفقود.");
+
+            const payload = {
+                model: GROQ_MODEL,
+                messages: [
+                    { role: "system", content: sysPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                temperature: 0.3,
+                max_completion_tokens: 1024
+            };
+            if (jsonMode) payload.response_format = { type: "json_object" };
+
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error?.message || "خطأ من خوادم Groq");
+            }
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        window.setView = function(view) {
+            clearInterval(state.prodState.timerInterval);
+            clearInterval(state.stressState.timerInterval);
+            state.view = view;
+            render();
+        };
+
+        window.selectModule = function(moduleId) {
+            state.selectedModuleId = moduleId;
+            setView('moduleSelect');
+        };
+
+        window.startModule = function(moduleId) {
+            state.activeModule = moduleId;
+            state.activeQuestions = shuffleArray(questionDatabase[moduleId]);
+            state.currentQIndex = 0;
+            state.score = 0;
+            state.selectedAnswer = null;
+            state.isAnswerChecked = false;
+            state.mistakes = [];
+            state.view = 'playing';
+            
+            const q = state.activeQuestions[0];
+            const optionsMap = q.options.map((opt, idx) => ({ text: opt, originalIdx: idx }));
+            state.currentOptionsShuffled = shuffleArray(optionsMap);
+            render();
+        };
+
+        window.startModuleIA = async function(moduleId) {
+            if (!localStorage.getItem('defiArabicGroqKey')) return toggleSettings();
+            
+            state.activeModule = moduleId;
+            state.view = 'generatingQuiz';
+            state.iaError = null;
+            render();
+            
+            const mod = modulesInfo.find(m => m.id === moduleId);
+            
+            const sysPrompt = `You are an expert Arabic language examiner for the Moroccan Baccalaureate.
+Generate a high-quality, very challenging multiple-choice quiz of 5 unique questions for the module category: ${mod.title}.
+All questions, concepts, options, explanations, and analyses must be written in standard, formal Arabic (الفصحى).
+
+Strict Grammar Reference Checklist:
+You MUST verify your questions and options against these strict academic rules:
+1. "العدد والتمييز" (Numbers and Distinction):
+   - Noun Gender Verification: Double check if the counted noun (المعدود) is masculine (مذكر) or feminine (مؤنث) in its singular form! (e.g. "سد" is masculine: هذا سدّ; "شجرة" is feminine: هذه شجرة).
+   - Numbers 3 to 9: Must DISAGREE with the singular noun gender (e.g. "خمسةُ مشاريعَ" because "مشروع" is masculine; "خمسُ غاباتٍ" because "غابة" is feminine). The counted noun must be plural genitive.
+   - Numbers 11 and 12: Both parts must AGREE with the noun gender (e.g. "أحدَ عشرَ سداً", "إحدى عشرةَ غابةً").
+   - Numbers 13 to 19 (Compound): The first part DISAGREES with the singular noun gender, and the second part AGREES (e.g. "خمسةَ عشرَ سداً" -> "سد" is masculine, so "خمسة" is feminine and "عشر" is masculine; "خمسَ عشرةَ غابةً" -> "غابة" is feminine, so "خمس" is masculine and "عشرة" is feminine). The counted noun must be singular accusative.
+   - Case & Diacritics: Compound numbers 11 to 19 (except 12) are ALWAYS built on the opening of both parts (مبني على فتح الجزأين) with fathah on both parts (e.g. "خمسةَ عشرَ"), regardless of being nominative, accusative, or genitive. Do not hallucinate case endings.
+2. "النسبة والمصادر" (Attribution and Sources):
+   - الاسم الممدود (e.g. خضراء): If the hamzah is for feminine, it MUST turn into a waw (e.g. "خضراويّ" is correct; "خضرويّ" or "خضرائيّ" are completely wrong).
+   - الاسم المقصور (e.g. مستشفى): If the alpha is 4th letter or more, it MUST be deleted (e.g. "مستشفيّ").
+
+Mandatory Self-Correction Protocol:
+For each generated question, you MUST perform a detailed step-by-step grammatical analysis in Arabic inside a "grammatical_analysis" field in the JSON before finalising the correct option. In this analysis:
+- State the grammatical topic.
+- Determine the exact gender of the target noun/subject.
+- Step-by-step evaluate the agreement and declension rules.
+- Confirm the correct option and justify the elimination of each distractor.
+
+Strict Rules for Question Structure:
+1. The question is a fill-in-the-blank sentence where the gap is represented by the space between textParts[0] and textParts[1].
+2. When the correct option (index 0) is inserted between textParts[0] and textParts[1], the resulting sentence MUST be 100% grammatically correct, semantically meaningful, and natural-sounding in Arabic.
+3. Every option (both correct and distractors) must be of the same grammatical class (e.g., all nouns, all numbers, all verbs, all prepositions). When ANY option is placed in the gap, it must not result in syntax errors, double words, or adjacent duplicate nouns.
+4. Specifically:
+   - For "علوم اللغة: التمييز والعدد" (Grammar: Distinction and Numbers):
+     * If you are testing the counted noun (التمييز), the options must be different grammatical forms of the noun (e.g., ["شجرةً", "أشجارٍ", "شجرةٍ", "شجرةٌ"]), and the sentence text must contain the number (e.g. textParts: ["غرستُ خمسةَ عشرَ ", " في الحديقةِ."]).
+     * If you are testing the number (العدد), the options must be different Arabic numbers/forms (e.g., ["خمسةَ عشرَ", "خمسَ عشرةَ", "خمسةُ عشرُ", "خمسَ عشرَ"]), and the sentence text must contain the counted noun (e.g. textParts: ["في المدينةِ ", " مشروعاً تنموياً."]).
+     * NEVER place a noun in the options if the sentence already contains the noun next to the gap.
+   - For "علوم اللغة: النسبة والمصادر" (Morphology: Attribution and Sources):
+     * The options must be different morphological forms of the relative noun (الاسم المنسوب) or source/verbal noun (المصدر) (e.g., options: ["صناعيّ", "صنعويّ", "صنعيّ", "صناعتيّ"]).
+   - For "الأساليب والظواهر البلاغية" (Rhetorical Methods):
+     * Present a Quranic verse, poem line, or statement, and ask for the rhetorical meaning or type. The gap should fit the correct rhetorical terminology.
+
+5. Strict Vocabulary & Theme Diversity Rule:
+   * Do NOT use the word "كتاب" (book) or "تلميذ" (student) as the primary noun in the questions.
+   * Draw from a rich vocabulary and diverse fields from the Baccalaureate themes, such as:
+     - Technology & Modernization (التكنولوجيا والتحديث - e.g., اختراع, حاسوب, هاتف, شبكة, ابتكار)
+     - Human Development (التنمية البشرية - e.g., مشروع, مؤسسة, إنتاج, مجتمع, طاقة)
+     - Migration & Society (الهجرة والمجتمع - e.g., وطن, دولة, مهاجر, قارة, حدود)
+     - Cultural & Moral Values (القيم الإنسانية - e.g., تسامح, تضامن, سلام, جمال, حرية)
+     - Environment & Nature (البيئة والطبيعة - e.g., شجرة, غابة, سد, نهر, كوكب)
+     - Time & Measurement (الزمن والمقاييس - e.g., قرن, عام, سنة, شهر, يوم, ميل, صاع)
+   * Ensure that the 5 generated questions use 5 entirely different nouns, verbs, contexts, and themes. Do not repeat the same context.
+
+Strict Rules for the JSON output:
+1. The response must be STRICTLY valid JSON without any markdown formatting, backticks, or extra text.
+2. "textParts" must contain exactly 2 string items representing the text before the gap and after the gap. Do not include ellipses or underscores in "textParts" where the gap is; the interface renders the gap automatically.
+3. The index 0 in the "options" array MUST always be the strictly correct answer (the app will shuffle it automatically).
+4. Distractors must represent common student errors but fit the sentence syntax.
+5. Provide a thorough, pedagogically rich explanation in the "explanation" property in Arabic.
+
+Expected JSON Structure:
+{
+  "questions": [
+    {
+      "grammatical_analysis": "تحليل نحوي/صرفي مفصل خطوة بخطوة.",
+      "textParts": ["جملة قبل الفراغ ", " جملة بعد الفراغ."],
+      "options": ["الكلمة الصحيحة", "مشتت 1", "مشتت 2", "مشتت 3"],
+      "correct": 0,
+      "explanation": "شرح نحوي وبلاغي مفصل جداً يوضح القاعدة لتجنب الخطأ لاحقاً."
+    }
+  ]
+}`;
+
+            const userPrompt = `Generate 5 challenging questions in Arabic for: ${mod.title}.`;
+            
+            try {
+                const responseText = await fetchFromGroq(sysPrompt, userPrompt, true);
+                const data = JSON.parse(responseText);
+                
+                if (data && data.questions && data.questions.length > 0) {
+                    state.activeQuestions = data.questions;
+                    state.currentQIndex = 0;
+                    state.score = 0;
+                    state.selectedAnswer = null;
+                    state.isAnswerChecked = false;
+                    state.mistakes = [];
+                    state.view = 'playing';
+                    
+                    const q = state.activeQuestions[0];
+                    const optionsMap = q.options.map((opt, idx) => ({ text: opt, originalIdx: idx }));
+                    state.currentOptionsShuffled = shuffleArray(optionsMap);
+                } else {
+                    throw new Error("تنسيق استجابة غير صالح من خادم الذكاء الاصطناعي");
+                }
+            } catch (error) {
+                console.error(error);
+                state.iaError = "حدث خطأ أثناء تشغيل الذكاء الاصطناعي: " + error.message + ". يتم تحميل الوضع الكلاسيكي...";
+                render();
+                setTimeout(() => {
+                    state.iaError = null;
+                    window.startModule(moduleId);
+                }, 3000);
+            }
+            render();
+        };
+
+        window.handleSelect = function(index) {
+            if (state.isAnswerChecked) return;
+            state.selectedAnswer = index;
+            render();
+        };
+
+        window.checkAnswer = function() {
+            if (state.selectedAnswer === null) return;
+            state.isAnswerChecked = true;
+            const q = state.activeQuestions[state.currentQIndex];
+            const chosen = state.currentOptionsShuffled[state.selectedAnswer];
+            
+            if (chosen.originalIdx === q.correct) state.score++;
+            else state.mistakes.push({ q: q, wrong: chosen.text });
+            render();
+        };
+
+        window.nextQuestion = function() {
+            if (state.currentQIndex < state.activeQuestions.length - 1) {
+                state.currentQIndex++;
+                state.selectedAnswer = null;
+                state.isAnswerChecked = false;
+                const q = state.activeQuestions[state.currentQIndex];
+                const optionsMap = q.options.map((opt, idx) => ({ text: opt, originalIdx: idx }));
+                state.currentOptionsShuffled = shuffleArray(optionsMap);
+                render();
+            } else {
+                saveStat(state.activeModule, state.score, state.activeQuestions.length);
+                state.view = 'result';
+                render();
+            }
+        };
+
+        // --- PRODUCTION ECRITE LOGIC (Arabic Idea Expansion) ---
+        window.startProdEcrite = function() {
+            clearInterval(state.prodState.timerInterval);
+            const subjects = [
+                "إن التنمية الحقيقية هي التي تضع الإنسان في جوهر اهتمامها، وترقى بعقله وصحته قبل تشييد المصانع.",
+                "أصبحت التكنولوجيا الرقمية سيفاً ذا حدين؛ فهي تقرّب البعيد جغرافياً، لكنها تبعد القريب وجدانياً واجتماعياً.",
+                "الهجرة ليست مجرد مغامرة للبحث عن لقمة العيش، بل هي غالباً صرخة احتجاج على غياب شروط العيش الكريم والعدالة.",
+                "لا تستقيم الحداثة بالتقليد الأعمى للمجتمعات الغربية، بل تنطلق من تمثل قيم العقلانية والإنتاج مع الاحتفاظ بالهوية."
+            ];
+            state.prodState = {
+                step: 'writing',
+                subject: subjects[Math.floor(Math.random() * subjects.length)],
+                text: '', errors: [], currentErrIdx: 0, attempts: 0, feedback: null, timeLeft: 2700,
+                timerInterval: setInterval(() => {
+                    if (state.prodState.timeLeft > 0 && state.prodState.step === 'writing') {
+                        state.prodState.timeLeft--;
+                        const min = Math.floor(state.prodState.timeLeft / 60).toString().padStart(2, '0');
+                        const sec = (state.prodState.timeLeft % 60).toString().padStart(2, '0');
+                        const timerEl = document.getElementById('prod-timer');
+                        if (timerEl) timerEl.innerText = `${min}:${sec}`;
+                    }
+                }, 1000)
+            };
+            state.view = 'prodEcrite';
+            render();
+        };
+
+        window.changeProdSubject = function() {
+            const subjects = [
+                "إن التنمية الحقيقية هي التي تضع الإنسان في جوهر اهتمامها، وترقى بعقله وصحته قبل تشييد المصانع.",
+                "أصبحت التكنولوجيا الرقمية سيفاً ذا حدين؛ فهي تقرّب البعيد جغرافياً، لكنها تبعد القريب وجدانياً واجتماعياً.",
+                "الهجرة ليست مجرد مغامرة للبحث عن لقمة العيش، بل هي غالباً صرخة احتجاج على غياب شروط العيش الكريم والعدالة.",
+                "لا تستقيم الحداثة بالتقليد الأعمى للمجتمعات الغربية، بل تنطلق من تمثل قيم العقلانية والإنتاج مع الاحتفاظ بالهوية."
+            ];
+            let nextSub = state.prodState.subject;
+            while(nextSub === state.prodState.subject) {
+                nextSub = subjects[Math.floor(Math.random() * subjects.length)];
+            }
+            state.prodState.subject = nextSub;
+            render();
+        };
+
+        window.verifyProdText = async function() {
+            const text = document.getElementById('prod-textarea').value.trim();
+            if (!text) return alert("الرجاء كتابة فقرة أولاً قبل إجراء المسح والتحليل!");
+            if (!localStorage.getItem('defiArabicGroqKey')) return toggleSettings();
+
+            state.prodState.text = text;
+            state.prodState.step = 'checking';
+            render();
+
+            try {
+                const sysPrompt = `You are an expert Arabic language examiner. Analyze the student's text for spelling (إملاء), grammar (نحو), or style (أسلوب/تركيب) errors.
+Strict Rules:
+1. "wrong_word" MUST be a substring that exists EXACTLY, character-for-character, in the student's input text.
+2. "context" MUST be a short snippet (around 5-8 words) from the student's text containing the "wrong_word".
+3. "correction" MUST be the exact correct spelling or grammatical form to replace the "wrong_word".
+4. "message" MUST explain the grammatical or spelling rule in simple, standard Arabic (الفصحى).
+5. Only report actual errors according to formal Arabic grammar and orthography. Do not invent errors.
+
+Return STRICTLY a JSON object formatted exactly like this:
+{
+  "matches": [
+    { 
+      "wrong_word": "الكلمة_الخاطئة_بالضبط", 
+      "context": "جزء من النص يحتوي على الكلمة الخاطئة", 
+      "correction": "الكلمة_الصحيحة", 
+      "message": "توضيح القاعدة اللغوية أو الإملائية بالعربية الفصحى." 
+    }
+  ]
+}
+If no errors are found, return {"matches": []}.`;
+
+                const responseText = await fetchFromGroq(sysPrompt, text, true);
+                const data = JSON.parse(responseText);
+                
+                state.prodState.errors = (data.matches || []).map(m => {
+                    let ctxText = m.context || text;
+                    let offset = ctxText.indexOf(m.wrong_word);
+                    return {
+                        message: m.message,
+                        context: { text: ctxText, offset: offset > -1 ? offset : 0, length: m.wrong_word ? m.wrong_word.length : 0, originalWrongWord: m.wrong_word },
+                        correction: m.correction
+                    };
+                });
+                
+                if (state.prodState.errors.length === 0) state.prodState.step = 'summary';
+                else {
+                    state.prodState.step = 'correcting';
+                    state.prodState.currentErrIdx = 0;
+                }
+            } catch (error) {
+                alert("حدث خطأ أثناء فحص النص: " + error.message);
+                state.prodState.step = 'writing';
+            }
+            render();
+        };
+
+        window.checkCorrection = function() {
+            const input = document.getElementById('correction-input').value.trim();
+            if (!input) return;
+
+            const err = state.prodState.errors[state.prodState.currentErrIdx];
+            const isCorrect = input === err.correction;
+            
+            if (isCorrect) {
+                state.prodState.feedback = { status: 'correct', msg: 'تصويب رائع وصحيح تماماً!' };
+                render();
+                setTimeout(() => advanceCorrection(), 1200);
+            } else {
+                state.prodState.attempts++;
+                if (state.prodState.attempts >= 3) {
+                    state.prodState.feedback = { status: 'failed', msg: `نفدت المحاولات. التصويب الصحيح كان: "${err.correction}"` };
+                    render();
+                    setTimeout(() => advanceCorrection(), 3000);
+                } else {
+                    const remaining = 3 - state.prodState.attempts;
+                    state.prodState.feedback = { status: 'wrong', msg: `خطأ! متبقي لديك ${remaining} محاولة.` };
+                    render();
+                    setTimeout(() => document.getElementById('correction-input').focus(), 50);
+                }
+            }
+        };
+
+        function advanceCorrection() {
+            state.prodState.currentErrIdx++;
+            state.prodState.attempts = 0;
+            state.prodState.feedback = null;
+            if (state.prodState.currentErrIdx >= state.prodState.errors.length) state.prodState.step = 'summary';
+            render();
+            if(state.prodState.step === 'correcting') setTimeout(() => document.getElementById('correction-input').focus(), 50);
+        }
+
+        // --- STRESS SIMULATOR LOGIC ---
+        window.startStressSimulator = function() {
+            clearInterval(state.stressState.timerInterval);
+            state.stressState = {
+                step: 'intro',
+                subject: impossibleQuestions[Math.floor(Math.random() * impossibleQuestions.length)],
+                text: '', feedbackHtml: '', timeLeft: 300, timerInterval: null
+            };
+            state.view = 'stressSimulator';
+            render();
+        };
+
+        window.beginStressWriting = function() {
+            if (!localStorage.getItem('defiArabicGroqKey')) return toggleSettings();
+            state.stressState.step = 'writing';
+            state.stressState.timerInterval = setInterval(() => {
+                if (state.stressState.timeLeft > 0 && state.stressState.step === 'writing') {
+                    state.stressState.timeLeft--;
+                    const min = Math.floor(state.stressState.timeLeft / 60).toString().padStart(2, '0');
+                    const sec = (state.stressState.timeLeft % 60).toString().padStart(2, '0');
+                    const timerEl = document.getElementById('stress-timer');
+                    if (timerEl) timerEl.innerText = `${min}:${sec}`;
+                    if(state.stressState.timeLeft <= 0) evaluateStressPlan();
+                }
+            }, 1000);
+            render();
+        };
+
+        window.evaluateStressPlan = async function() {
+            const text = document.getElementById('stress-textarea')?.value.trim() || state.stressState.text;
+            if (!text && state.stressState.timeLeft > 0) return alert("يجب كتابة الخطة المقترحة للتحليل أولاً!");
+            
+            clearInterval(state.stressState.timerInterval);
+            state.stressState.text = text;
+            state.stressState.step = 'evaluating';
+            render();
+
+            try {
+                const sysPrompt = `You are an expert Arabic professor grading a student's structured essay plan (تصميم منهجية لتوسيع فكرة) for the Baccalaureate.
+Subject of essay: "${state.stressState.subject}"
+Student's proposed plan: "${text || "[لم يتم كتابة أي خطة]"}"
+
+Generate a constructive, professional, and detailed evaluation in formal Arabic (الفصحى).
+Strict rules for output:
+1. Use HTML tags for formatting (e.g., <ul>, <li>, <strong>, <span>).
+2. Do NOT use any Markdown formatting, asterisks (**), or backticks.
+3. Be highly accurate and objective, grading:
+   - Coherence and methodology (Introduction, body paragraphs/arguments, conclusion).
+   - Relevance and quality of arguments and cultural/social concepts used.
+   - Specific linguistic or structural weaknesses with advice on how to improve.`;
+                
+                const feedback = await fetchFromGroq(sysPrompt, text, false);
+                state.stressState.feedbackHtml = feedback;
+                state.stressState.step = 'feedback';
+            } catch (err) {
+                state.stressState.feedbackHtml = `<p class="text-rose-400">خطأ في الاتصال بالخادم الإرشادي: ${err.message}</p>`;
+                state.stressState.step = 'feedback';
+            }
+            render();
+        };
+
+        function renderHome() {
+            const hasKey = !!localStorage.getItem('defiArabicGroqKey');
+            let modulesHtml = modulesInfo.map(mod => `
+                <button onclick="selectModule('${mod.id}')" class="relative text-right p-3 rounded-xl border border-${mod.color}-500/20 bg-${mod.color}-500/5 hover:bg-${mod.color}-500/10 transition-all active:scale-95 fade-in">
+                    <div class="flex items-center gap-2">
+                        <div class="p-1.5 bg-slate-900 rounded border border-slate-800 text-${mod.color}-400 shrink-0"><i class="${mod.icon} text-lg"></i></div>
+                        <div>
+                            <h3 class="text-[11px] font-bold text-slate-200">${mod.title}</h3>
+                            <p class="text-[9px] text-slate-400 leading-tight mt-1">${mod.desc}</p>
+                        </div>
+                    </div>
+                </button>
+            `).join('');
+
+            return `
+                <div class="p-3 max-w-4xl mx-auto w-full fade-in flex flex-col justify-center min-h-[92vh]">
+                    <div class="flex justify-start mb-2">
+                        <button onclick="toggleSettings()" class="text-[10px] bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-slate-800 transition-colors ${hasKey ? 'text-emerald-400' : 'text-slate-400'}">
+                            <i class="ph-gear"></i> ${hasKey ? 'متصل بالذكاء الاصطناعي' : 'إعدادات المفتاح'}
+                        </button>
+                    </div>
+
+                    <div class="text-center mb-6">
+                        <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-400 mb-2">
+                            تحدي العربية — الامتحان الجهوي (1 باك)
+                        </h1>
+                        <p class="text-[10px] md:text-xs text-slate-400">التحضير الذكي لعلوم اللغة والتعبير والإنشاء لضمان أعلى المعدلات الجهوية.</p>
+                    </div>
+
+                    <!-- محاكي الضغط والإنشاء الحجاجي -->
+                    <button onclick="startStressSimulator()" class="w-full mb-3 p-3 rounded-xl border border-rose-500/30 bg-gradient-to-l from-rose-950/40 to-slate-900 hover:to-rose-950/20 transition-all flex items-center justify-between group fade-in shadow-lg">
+                        <div class="flex items-center gap-3 text-right">
+                            <div class="p-2 bg-rose-500/20 rounded-lg text-rose-400 shadow-inner">
+                                <i class="ph-flame text-xl animate-pulse-fast"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-xs text-slate-100 flex items-center gap-1.5">تحدي الوقت: المنهجية السريعة <span class="text-[8px] bg-rose-600 text-white px-1.5 py-0.5 rounded font-bold">تحدي ناري</span></h4>
+                                <p class="text-[9px] text-slate-400 mt-1">لديك 5 دقائق فقط لوضع تصميم منهجي دقيق لقضية معقدة. التقييم فوري بالذكاء الاصطناعي.</p>
+                            </div>
+                        </div>
+                        <i class="ph-caret-left text-sm text-rose-400 group-hover:-translate-x-1 transition-transform"></i>
+                    </button>
+
+                    <!-- ورشة التعبير والإنشاء -->
+                    <button onclick="startProdEcrite()" class="w-full mb-4 p-3 rounded-xl border border-emerald-500/30 bg-gradient-to-l from-emerald-950/40 to-slate-900 transition-all flex items-center justify-between group fade-in">
+                        <div class="flex items-center gap-3 text-right">
+                            <div class="p-2 bg-emerald-500/20 rounded-lg text-emerald-400 shadow-inner"><i class="ph-pencil-line text-xl"></i></div>
+                            <div>
+                                <h4 class="font-bold text-xs text-slate-100">ورشة توسيع فكرة والمسح الذكي (مصحح القواعد)</h4>
+                                <p class="text-[9px] text-slate-400 mt-1">اكتب مقطعاً إنشائياً مكملاً وسيقوم الذكاء الاصطناعي برصد أخطائك اللغوية وتحديك لإصلاحها.</p>
+                            </div>
+                        </div>
+                        <i class="ph-caret-left text-sm text-emerald-400 group-hover:-translate-x-1 transition-transform"></i>
+                    </button>
+
+                    <div class="mb-2 px-1"><h3 class="text-[10px] font-bold uppercase text-slate-400"><i class="ph-lightning text-yellow-400"></i> اختبارات سريعة فورية:</h3></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        ${modulesHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderModuleSelect() {
+            const mod = modulesInfo.find(m => m.id === state.selectedModuleId);
+            const hasKey = !!localStorage.getItem('defiArabicGroqKey');
+            
+            return `
+                <div class="p-4 max-w-xl mx-auto w-full fade-in min-h-[92vh] flex flex-col justify-center">
+                    <button onclick="setView('home')" class="text-slate-400 hover:text-white mb-4 text-[11px] font-semibold w-max"><i class="ph-arrow-right"></i> عودة للرئيسية</button>
+                    
+                    <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl text-center shadow-xl">
+                        <div class="p-3 bg-slate-950 rounded-full border border-slate-800 w-12 h-12 flex items-center justify-center mx-auto mb-4 text-emerald-400">
+                            <i class="${mod.icon} text-xl"></i>
+                        </div>
+                        <h2 class="text-lg font-bold text-white mb-1">${mod.title}</h2>
+                        <p class="text-xs text-slate-400 mb-6 leading-relaxed">${mod.desc}</p>
+                        
+                        <div class="grid grid-cols-1 gap-3">
+                            <!-- الوضع الكلاسيكي -->
+                            <button onclick="startModule('${mod.id}')" class="p-3.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-900 text-right transition-all active:scale-95 group">
+                                <h4 class="font-bold text-xs text-slate-100 flex items-center justify-between">الوضع القياسي (أسئلة البرنامج) <i class="ph-caret-left text-slate-500 group-hover:-translate-x-1 transition-transform"></i></h4>
+                                <p class="text-[9px] text-slate-400 mt-1">مجموعة اختبارات تم وضعها مسبقاً بناءً على الامتحانات الجهوية الرسمية.</p>
+                            </button>
+                            
+                            <!-- وضع توليد الذكاء الاصطناعي -->
+                            <button onclick="startModuleIA('${mod.id}')" class="p-3.5 rounded-xl border ${hasKey ? 'border-emerald-500/30 bg-emerald-950/20 hover:bg-emerald-950/45' : 'border-slate-800 bg-slate-950 opacity-50 cursor-not-allowed'} text-right transition-all active:scale-95 group" ${!hasKey ? 'disabled' : ''}>
+                                <h4 class="font-bold text-xs ${hasKey ? 'text-emerald-300' : 'text-slate-400'} flex items-center justify-between">توليد اختبار ذكي جديد بالكامل <i class="ph-sparkle text-emerald-400"></i></h4>
+                                <p class="text-[9px] text-slate-400 mt-1">يقوم الذكاء الاصطناعي بتركيب أسئلة فريدة صعبة وجديدة لم تمارسها من قبل.</p>
+                                ${!hasKey ? '<span class="inline-block mt-2 text-[8px] bg-slate-800 text-rose-400 px-1.5 py-0.5 rounded font-bold"><i class="ph-lock"></i> يتطلب إدخال مفتاح Groq</span>' : ''}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGeneratingQuiz() {
+            return `
+                <div class="p-4 max-w-xl mx-auto w-full fade-in min-h-[92vh] flex flex-col justify-center text-center">
+                    <i class="ph-cpu text-4xl text-emerald-400 animate-pulse mb-3 mx-auto"></i>
+                    <h3 class="text-sm font-bold">يقوم الذكاء الاصطناعي بتركيب أسئلة جهوية مخصصة لك...</h3>
+                    <p class="text-[10px] text-slate-400 mt-2 max-w-xs mx-auto">يتم استخدام طراز Llama 3.3 المطور لبناء أسئلة متطابقة مع الأوزان المنهجية للوزارة.</p>
+                    ${state.iaError ? `<div class="mt-4 p-3 rounded-lg bg-rose-950/40 border border-rose-900/50 text-[10px] text-rose-400">${state.iaError}</div>` : ''}
+                </div>
+            `;
+        }
+
+        function renderPlaying() {
+            const q = state.activeQuestions[state.currentQIndex];
+            const modData = modulesInfo.find(m => m.id === state.activeModule);
+            const progress = ((state.currentQIndex) / state.activeQuestions.length) * 100;
+
+            let optionsHtml = state.currentOptionsShuffled.map((opt, idx) => {
+                let btnClass = "bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800";
+                let icon = '';
+                if (state.isAnswerChecked) {
+                    if (opt.originalIdx === q.correct) { btnClass = "bg-emerald-950/60 border-emerald-500 text-emerald-300"; icon = '<i class="ph-check-circle text-lg text-emerald-400"></i>'; }
+                    else if (idx === state.selectedAnswer) { btnClass = "bg-rose-950/60 border-rose-500 text-rose-300"; icon = '<i class="ph-x-circle text-lg text-rose-400"></i>'; }
+                    else { btnClass = "bg-slate-900 border-slate-800 text-slate-500 opacity-40"; }
+                } else if (state.selectedAnswer === idx) {
+                    btnClass = "bg-emerald-900/40 border-emerald-500 text-emerald-300";
+                }
+                return `<button onclick="handleSelect(${idx})" ${state.isAnswerChecked ? 'disabled' : ''} class="flex items-center justify-between p-3 rounded-xl border transition-all text-xs font-medium text-right ${btnClass}"><span class="flex items-center gap-2"><span class="text-slate-500 font-mono text-[9px] bg-slate-950 px-1 py-0.5 rounded">${idx + 1}</span> ${opt.text}</span>${icon}</button>`;
+            }).join('');
+
+            return `
+                <div class="p-3 max-w-xl mx-auto w-full fade-in min-h-[92vh] flex flex-col justify-center">
+                    <div class="flex justify-between mb-3">
+                        <button onclick="setView('home')" class="text-slate-400 hover:text-white text-[11px] font-semibold"><i class="ph-arrow-right"></i> مغادرة الإكمال</button>
+                        <span class="text-[10px] font-bold text-slate-500 uppercase">السؤال ${state.currentQIndex + 1}/${state.activeQuestions.length}</span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-1.5 rounded-full mb-5 border border-slate-800"><div class="bg-emerald-500 h-full transition-all" style="width: ${progress}%"></div></div>
+                    
+                    <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800 mb-5">
+                        <p class="text-sm font-medium mb-5 text-slate-100 leading-relaxed">${q.textParts[0]} <span class="inline-block border-b-2 mx-1 font-bold px-3 py-0.5 rounded ${!state.isAnswerChecked ? 'border-slate-500 text-emerald-400 bg-slate-950' : (state.currentOptionsShuffled[state.selectedAnswer]?.originalIdx === q.correct ? 'border-emerald-500 text-emerald-400 bg-emerald-950' : 'border-rose-500 text-rose-400 bg-rose-950')}">${state.selectedAnswer !== null ? state.currentOptionsShuffled[state.selectedAnswer].text : '......'}</span> ${q.textParts[1]}</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${optionsHtml}</div>
+                        ${state.isAnswerChecked ? `<div class="mt-4 p-3 rounded-xl border ${state.currentOptionsShuffled[state.selectedAnswer].originalIdx === q.correct ? 'bg-emerald-900/10 border-emerald-900/50 text-emerald-200' : 'bg-rose-900/10 border-rose-900/50 text-rose-200'} fade-in text-[11px] leading-relaxed">${q.explanation}</div>` : ''}
+                    </div>
+                    <div class="flex justify-end">
+                        ${!state.isAnswerChecked 
+                            ? `<button onclick="checkAnswer()" ${state.selectedAnswer === null ? 'disabled' : ''} class="px-5 py-2 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 transition-all">تحقق من صحة الجواب</button>`
+                            : `<button onclick="nextQuestion()" class="px-5 py-2 rounded-xl font-bold text-xs bg-white text-slate-900 hover:bg-slate-200 transition-all">السؤال التالي <i class="ph-caret-left"></i></button>`}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderResult() {
+            return `
+                <div class="p-3 max-w-xl mx-auto w-full fade-in text-center flex flex-col justify-center min-h-[92vh]">
+                    <h2 class="text-4xl font-black mb-1">${state.score} / ${state.activeQuestions.length}</h2>
+                    <p class="text-xs text-slate-400 mt-1">النتيجة الإجمالية للإنجاز والتمكن من المفاهيم.</p>
+                    <div class="flex gap-3 justify-center mb-6 mt-6">
+                        <button onclick="startModule('${state.activeModule}')" class="bg-slate-800 hover:bg-slate-700 text-white py-2 px-5 rounded-lg text-xs font-bold border border-slate-700"><i class="ph-arrow-counter-clockwise"></i> إعادة الاختبار</button>
+                        <button onclick="setView('home')" class="bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-5 rounded-lg text-xs font-bold"><i class="ph-house"></i> شاشة البداية</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderProdEcrite() {
+            const { step, text, errors, currentErrIdx, attempts, feedback, subject } = state.prodState;
+            let content = '';
+
+            if (step === 'writing') {
+                const min = Math.floor(state.prodState.timeLeft / 60).toString().padStart(2, '0');
+                const sec = (state.prodState.timeLeft % 60).toString().padStart(2, '0');
+                content = `
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex-grow flex flex-col relative">
+                        <div class="absolute top-3 left-3 flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded text-slate-300 border border-slate-800"><span id="prod-timer" class="font-mono text-xs">${min}:${sec}</span><i class="ph-timer text-rose-400"></i></div>
+                        <p class="text-[10px] text-slate-400 mb-2">اكتب فقرة متماسكة ومقنعة حجاجياً للتوسع في القضية أدناه، مع مراعاة السلامة النحوية واللغوية.</p>
+                        
+                        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 mb-3 relative flex items-center justify-between gap-4">
+                            <div>
+                                <span class="text-[8px] font-bold text-emerald-400 uppercase tracking-wider block mb-0.5">قولة الفكرة المطلوب توسيعها:</span>
+                                <p class="text-[11px] font-medium text-slate-200 leading-normal italic">"${subject}"</p>
+                            </div>
+                            <button onclick="changeProdSubject()" class="text-slate-500 hover:text-emerald-400 transition-colors p-1.5 bg-slate-900 border border-slate-850 rounded-md" title="تغيير الموضوع">
+                                <i class="ph-arrows-clockwise text-sm"></i>
+                            </button>
+                        </div>
+
+                        <textarea id="prod-textarea" class="w-full flex-grow bg-slate-950 border border-slate-700 rounded-lg p-3 text-[11px] text-white focus:outline-none focus:border-emerald-500 resize-none min-h-[200px]" placeholder="مثال: يرى الكاتب في قوله هذا أن التنمية لا يمكن اختزالها في جوانب مادية فحسب..."></textarea>
+                        <div class="mt-3 flex justify-start"><button onclick="verifyProdText()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-[11px] font-bold"><i class="ph-magnifying-glass"></i> تحليل وتصحيح النص بالأولى باك</button></div>
+                    </div>
+                `;
+            } else if (step === 'checking') {
+                content = `<div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center flex-grow flex flex-col justify-center"><i class="ph-robot text-4xl text-emerald-500 animate-pulse mb-3 mx-auto"></i><h3 class="text-sm font-bold">يتم حالياً فحص جودة النص ورصد أية أخطاء لغوية أو أسلوبية...</h3></div>`;
+            } else if (step === 'correcting') {
+                const err = errors[currentErrIdx];
+                content = `
+                    <div class="bg-slate-900 border border-emerald-500/30 rounded-xl p-4 flex flex-col">
+                        <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2"><h3 class="text-xs font-bold text-emerald-400">معمل الإصلاح الذاتي للإنشاء</h3><span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded">الخطأ اللغوي ${currentErrIdx + 1} من ${errors.length}</span></div>
+                        <div class="mb-4 text-[11px] text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800 leading-relaxed">
+                            السياق المكتشف: "... <span class="text-rose-400 font-bold bg-rose-500/10 px-1 py-0.5 rounded border border-rose-500/20">${err.context.originalWrongWord || '[تعبير محدد]'}</span> ..."
+                            <div class="text-[9px] text-blue-300 mt-2 italic"><i class="ph-info"></i> مؤشر الأستاذ: ${err.message}</div>
+                        </div>
+                        <div class="bg-slate-800/30 p-3 rounded-lg border border-slate-700">
+                            <label class="text-[10px] font-bold block mb-1">اكتب التصويب الصحيح للكلمة المظللة (المحاولة ${attempts + 1} من 3):</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="correction-input" onkeypress="if(event.key === 'Enter') checkCorrection()" class="flex-grow bg-slate-950 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500" placeholder="اكتب البديل الصحيح..." autocomplete="off">
+                                <button onclick="checkCorrection()" class="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold">تصويب</button>
+                            </div>
+                            ${feedback ? `<div class="mt-2 text-[10px] font-bold ${feedback.status === 'correct' ? 'text-emerald-400' : 'text-rose-400'}">${feedback.msg}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            } else if (step === 'summary') {
+                content = `<div class="bg-slate-900 rounded-xl p-5 text-center flex-grow flex flex-col justify-center"><i class="ph-check-fat text-3xl text-emerald-400 mb-2"></i><h2 class="text-lg font-bold">عمل ممتاز وخالٍ من الأخطاء!</h2><p class="text-xs text-slate-400">تم تصويب ومراجعة كامل النص الإنشائي الخاص بك بنجاح.</p></div>`;
+            }
+
+            return `<div class="p-3 max-w-2xl mx-auto w-full fade-in flex flex-col min-h-[92vh]"><button onclick="setView('home')" class="text-slate-400 hover:text-white mb-2 text-[11px] font-semibold w-max"><i class="ph-arrow-right"></i> رجوع</button>${content}</div>`;
+        }
+
+        function renderStressSimulator() {
+            const { step, subject, feedbackHtml, timeLeft } = state.stressState;
+            let content = '';
+
+            if (step === 'intro') {
+                content = `
+                    <div class="bg-slate-900 border border-rose-500/30 p-6 rounded-xl text-center">
+                        <i class="ph-flame text-4xl text-rose-500 mb-3 animate-pulse-fast"></i>
+                        <h2 class="text-lg font-bold text-white mb-2">تحدي الوقت الفائق</h2>
+                        <p class="text-xs text-slate-300 mb-6 leading-relaxed">لديك <strong>5 دقائق بالضبط</strong> للتفكير وصياغة خطة منهجية منظمة (مقدمة، عناصر التوسيع، خاتمة) من أجل معالجة موضوع معقد ومناقشته. ستحصل بعد انتهاء الوقت على تقييم ناري مجهري.</p>
+                        <button onclick="beginStressWriting()" class="bg-rose-600 hover:bg-rose-500 text-white px-6 py-2.5 rounded-lg text-xs font-bold w-full shadow-lg shadow-rose-900/50">بدء المؤقت التنازلي للجهوي</button>
+                    </div>
+                `;
+            } else if (step === 'writing') {
+                const min = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                const sec = (timeLeft % 60).toString().padStart(2, '0');
+                content = `
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex-grow flex flex-col">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-[10px] font-bold text-rose-400 uppercase tracking-widest">القضية الحجاجية المطلوبة:</h3>
+                            <div class="font-mono text-xl font-bold text-white bg-rose-950/50 px-3 py-1 rounded border border-rose-900" id="stress-timer">${min}:${sec}</div>
+                        </div>
+                        <p class="text-[11px] text-slate-200 bg-slate-950 p-3 rounded-lg border border-slate-800 italic mb-3">"${subject}"</p>
+                        <textarea id="stress-textarea" class="w-full flex-grow bg-slate-950 border border-slate-700 rounded-lg p-3 text-[11px] text-white focus:outline-none focus:border-rose-500 resize-none min-h-[200px]" placeholder="1. المقدمة (التمهيد والأسئلة المفتاحية)...\n2. العرض (التحليل والحجاج المعاكس)...\n3. الخاتمة (التركيب والخلاصة)..."></textarea>
+                        <button onclick="evaluateStressPlan()" class="mt-3 bg-white text-rose-900 px-4 py-2 rounded-lg text-[11px] font-bold hover:bg-slate-200">إرسال الخطة للمراجعة الفورية</button>
+                    </div>
+                `;
+            } else if (step === 'evaluating') {
+                content = `<div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center flex-grow flex flex-col justify-center"><i class="ph-cpu text-4xl text-rose-500 animate-pulse mb-3 mx-auto"></i><h3 class="text-sm font-bold">جاري مراجعة وتحليل الخطة بواسطة المصحح الآلي للامتحانات...</h3></div>`;
+            } else if (step === 'feedback') {
+                content = `
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex-grow flex flex-col">
+                        <h3 class="text-xs font-bold text-rose-400 mb-3 border-b border-slate-800 pb-2"><i class="ph-clipboard-text"></i> تقرير مصحح الامتحان الجهوي المعتمد:</h3>
+                        <div class="text-[11px] text-slate-350 leading-relaxed space-y-2 overflow-y-auto custom-scrollbar flex-grow pl-2">${feedbackHtml}</div>
+                    </div>
+                `;
+            }
+
+            return `<div class="p-3 max-w-2xl mx-auto w-full fade-in flex flex-col min-h-[92vh]"><button onclick="setView('home')" class="text-slate-400 hover:text-white mb-2 text-[11px] font-semibold w-max"><i class="ph-arrow-right"></i> الانسحاب من المواجهة</button>${content}</div>`;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            switch (state.view) {
+                case 'home': app.innerHTML = renderHome(); break;
+                case 'playing': app.innerHTML = renderPlaying(); break;
+                case 'result': app.innerHTML = renderResult(); break;
+                case 'prodEcrite': app.innerHTML = renderProdEcrite(); break;
+                case 'stressSimulator': app.innerHTML = renderStressSimulator(); break;
+                case 'moduleSelect': app.innerHTML = renderModuleSelect(); break;
+                case 'generatingQuiz': app.innerHTML = renderGeneratingQuiz(); break;
+            }
+            if(state.view === 'prodEcrite' && state.prodState.step === 'correcting' && !state.prodState.feedback){
+                 const input = document.getElementById('correction-input');
+                 if(input) input.focus();
+            }
+        }
+
+        window.onload = function() { render(); };
+
+        window.addEventListener('keydown', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (state.view === 'playing') {
+                if (['1', '2', '3', '4'].includes(e.key) && !state.isAnswerChecked) {
+                    const idx = parseInt(e.key) - 1;
+                    if (idx < state.currentOptionsShuffled.length) handleSelect(idx);
+                }
+                if (e.key === 'Enter') {
+                    if (!state.isAnswerChecked && state.selectedAnswer !== null) checkAnswer();
+                    else if (state.isAnswerChecked) nextQuestion();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
